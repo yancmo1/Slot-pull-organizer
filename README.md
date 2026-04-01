@@ -94,8 +94,42 @@ src/
 - Checked-in, waitlist flags
 - Soft-deleted via `deleted_at`
 
+## GitHub Pages Deployment
+
+The app is configured to deploy automatically to GitHub Pages using the included GitHub Actions workflow (`.github/workflows/deploy-pages.yml`).
+
+### Enable GitHub Pages
+
+1. Go to your repository on GitHub.
+2. Navigate to **Settings → Pages**.
+3. Under **Source**, select **GitHub Actions**.
+4. Save.
+
+The next push to `main` will trigger the workflow and publish the app to:
+
+```
+https://<your-github-username>.github.io/Slot-pull-organizer/
+```
+
+### Manual Deploy Trigger
+
+You can also trigger a deploy manually from the **Actions** tab → **Deploy to GitHub Pages** → **Run workflow**.
+
+### How It Works
+
+- The workflow runs `npm ci` and `npm run build` with `VITE_BASE_URL=/Slot-pull-organizer/` so asset paths are correct for the GitHub Pages sub-path.
+- The built `dist/` folder is uploaded as a Pages artifact and deployed by the `actions/deploy-pages` action.
+- The app uses `HashRouter` so deep-link navigation (e.g. opening an event page) works correctly on static hosting without a server-side fallback.
+
+### Using a Custom Domain
+
+If you configure a custom domain in GitHub Pages settings:
+
+1. Set `VITE_BASE_URL=/` in the workflow file (since the app will be at the root path).
+2. Push to `main` to redeploy.
+
 ## Offline & PWA
 
 The app uses a service worker (via Workbox) to cache all assets on first load. After that, it works entirely offline. All data writes go to IndexedDB first. A sync queue captures all mutations for future backend integration.
 
-To install as a PWA on iOS: open in Safari → Share → Add to Home Screen.
+To install as a PWA on iOS: open in Safari → **Share** → **Add to Home Screen**.

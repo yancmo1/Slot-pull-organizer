@@ -3,7 +3,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// VITE_BASE_URL is set by the GitHub Actions workflow for Pages deployment
+// (e.g. /Slot-pull-organizer/). Defaults to '/' for local development.
+const base = process.env.VITE_BASE_URL ?? '/'
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
