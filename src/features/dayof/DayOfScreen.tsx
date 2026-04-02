@@ -18,9 +18,11 @@ export function DayOfScreen() {
   const [filter, setFilter] = useState<Filter>('all')
   const [playMode, setPlayMode] = useState(false)
   const [spunParticipants, setSpunParticipants] = useState<Set<string>>(new Set())
+  const [currentRound, setCurrentRound] = useState(1)
   const [totalCredits, setTotalCredits] = useState('')
   const [showCalculator, setShowCalculator] = useState(false)
   const [showCheckInAllConfirm, setShowCheckInAllConfirm] = useState(false)
+  const [showNextRoundConfirm, setShowNextRoundConfirm] = useState(false)
 
   useEffect(() => {
     loadEvents()
@@ -43,6 +45,15 @@ export function DayOfScreen() {
     return true
   })
 
+  // In play mode, spun players sink to the bottom; unspun stay at the top
+  const sortedFiltered = playMode
+    ? [...filtered].sort((a, b) => {
+        const aSpun = spunParticipants.has(a.id) ? 1 : 0
+        const bSpun = spunParticipants.has(b.id) ? 1 : 0
+        return aSpun - bSpun
+      })
+    : filtered
+
   const handleToggleSpin = (participantId: string) => {
     setSpunParticipants(prev => {
       const newSet = new Set(prev)
@@ -53,6 +64,12 @@ export function DayOfScreen() {
       }
       return newSet
     })
+  }
+
+  const handleNextRound = () => {
+    setCurrentRound(prev => prev + 1)
+    setSpunParticipants(new Set())
+    setShowNextRoundConfirm(false)
   }
 
   const handleCheckInAll = async () => {
@@ -121,6 +138,22 @@ export function DayOfScreen() {
           </Button>
         </div>
 
+        {/* Round indicator + Next Round button (play mode only) */}
+        {playMode && (
+          <div className="flex items-center justify-between bg-slate-800 rounded-2xl px-4 py-3 mb-4 border border-slate-700">
+            <span className="text-white font-semibold">
+              🔄 Round <span className="text-blue-400 font-bold">{currentRound}</span>
+            </span>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setShowNextRoundConfirm(true)}
+            >
+              Next Round →
+            </Button>
+          </div>
+        )}
+
         {/* Live Totals Bar */}
         <div className="bg-slate-800 rounded-2xl p-3 mb-4 grid grid-cols-4 gap-2 text-center">
           <div>
@@ -156,7 +189,7 @@ export function DayOfScreen() {
 
         {/* Participant cards - large touch targets */}
         <div className="flex flex-col gap-3">
-          {filtered.map((p) => (
+          {sortedFiltered.map((p) => (
             <DayOfParticipantCard
               key={p.id}
               participant={p}
@@ -252,6 +285,15 @@ export function DayOfScreen() {
         title="Check In All Participants"
         message={`This will check in all ${roster.filter(p => !p.checked_in).length} unchecked participants. Are you sure?`}
         confirmText="Check In All"
+      />
+
+      <ConfirmDialog
+        open={showNextRoundConfirm}
+        onClose={() => setShowNextRoundConfirm(false)}
+        onConfirm={handleNextRound}
+        title="Start Next Round"
+        message={`This will clear all spun markers and begin Round ${currentRound + 1}. Are you sure?`}
+        confirmText="Start Round"
       />
     </div>
   )
