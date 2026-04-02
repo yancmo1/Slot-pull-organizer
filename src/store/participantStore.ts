@@ -14,6 +14,7 @@ interface ParticipantStore {
   toggleCheckedIn: (id: string) => Promise<void>
   toggleWaitlist: (id: string) => Promise<void>
   markPaid: (id: string) => Promise<void>
+  checkInAll: (eventId: string) => Promise<void>
 }
 
 export const useParticipantStore = create<ParticipantStore>((set, get) => ({
@@ -84,5 +85,15 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
     const p = get().participants.find((p) => p.id === id)
     if (!p) return
     await get().updateParticipant(id, { amount_paid: p.buy_in_amount })
+  },
+
+  checkInAll: async (eventId) => {
+    const participantsToCheckIn = get().participants.filter(
+      (p) => p.event_id === eventId && !p.checked_in && !p.waitlist
+    )
+
+    await Promise.all(
+      participantsToCheckIn.map((p) => get().updateParticipant(p.id, { checked_in: true }))
+    )
   },
 }))
