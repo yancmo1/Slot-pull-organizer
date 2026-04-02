@@ -4,7 +4,7 @@ import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
 import { calculateTotals } from '../../lib/utils/totals'
 import { Button } from '../../components/Button'
-import { Input } from '../../components/Input'
+import { NumberPad } from '../../components/NumberPad'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import type { Participant } from '../../types'
 
@@ -240,14 +240,8 @@ export function DayOfScreen() {
               <h2 className="text-white text-lg font-bold mb-4">💰 Winnings Calculator</h2>
 
               <div className="mb-4">
-                <Input
-                  label="Total Credits Won"
-                  type="number"
-                  value={totalCredits}
-                  onChange={(e) => setTotalCredits(e.target.value)}
-                  placeholder="Enter total credits"
-                  className="text-lg"
-                />
+                <p className="text-sm font-medium text-slate-300 mb-2">Total Credits Won</p>
+                <NumberPad value={totalCredits} onChange={setTotalCredits} />
               </div>
 
               {winnings && (
