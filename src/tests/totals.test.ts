@@ -45,7 +45,7 @@ describe('calculateTotals', () => {
     expect(totals.waitlistCount).toBe(1)
   })
 
-  it('counts checked-in participants', () => {
+  it('counts checked-in participants (roster only)', () => {
     const participants = [
       makeParticipant({ checked_in: true }),
       makeParticipant({ checked_in: true }),
@@ -53,6 +53,15 @@ describe('calculateTotals', () => {
     ]
     const totals = calculateTotals(participants)
     expect(totals.checkedInCount).toBe(2)
+  })
+
+  it('excludes waitlist participants from checkedInCount', () => {
+    const participants = [
+      makeParticipant({ checked_in: true }),
+      makeParticipant({ checked_in: true, waitlist: true }),
+    ]
+    const totals = calculateTotals(participants)
+    expect(totals.checkedInCount).toBe(1)
   })
 
   it('calculates money totals correctly', () => {

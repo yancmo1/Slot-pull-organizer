@@ -23,8 +23,8 @@ export default defineConfig({
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         categories: ['entertainment', 'lifestyle', 'utilities'],
         icons: [
           {
@@ -51,14 +51,14 @@ export default defineConfig({
             name: 'New Event',
             short_name: 'New Event',
             description: 'Create a new slot pull event',
-            url: '/#/new-event',
+            url: `${base}#/new-event`,
             icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }],
           },
           {
             name: 'Settings',
             short_name: 'Settings',
             description: 'App settings and backup',
-            url: '/#/settings',
+            url: `${base}#/settings`,
             icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }],
           },
         ],

@@ -6,6 +6,7 @@ import type { Event } from '../types'
 interface EventStore {
   events: Event[]
   loading: boolean
+  loaded: boolean
   loadEvents: () => Promise<void>
   createEvent: (data: Omit<Event, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'archived'>) => Promise<Event>
   updateEvent: (id: string, data: Partial<Event>) => Promise<void>
@@ -17,13 +18,14 @@ interface EventStore {
 export const useEventStore = create<EventStore>((set, get) => ({
   events: [],
   loading: false,
+  loaded: false,
 
   loadEvents: async () => {
     set({ loading: true })
     const events = await db.events
       .filter((e) => e.deleted_at === null || e.deleted_at === undefined)
       .toArray()
-    set({ events, loading: false })
+    set({ events, loading: false, loaded: true })
   },
 
   createEvent: async (data) => {
