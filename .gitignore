@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Icon generation scripts (temporary)
+generate-icons.mjs
+generate-splash.mjs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
