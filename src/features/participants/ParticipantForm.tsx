@@ -19,7 +19,7 @@ export function ParticipantForm({ eventId, defaultBuyIn, participant, onSave, on
   const [alias_or_real_name, setAlias] = useState(participant?.alias_or_real_name ?? '')
   const [buy_in_amount, setBuyIn] = useState(String(participant?.buy_in_amount ?? defaultBuyIn))
   const [amount_paid, setAmountPaid] = useState(String(participant?.amount_paid ?? 0))
-  const [payment_method, setPaymentMethod] = useState(participant?.payment_method ?? '')
+  const [payment_method, setPaymentMethod] = useState(participant?.payment_method ?? 'Cash')
   const [waitlist, setWaitlist] = useState(participant?.waitlist ?? false)
   const [notes, setNotes] = useState(participant?.notes ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
