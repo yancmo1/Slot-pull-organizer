@@ -43,6 +43,25 @@ export interface SyncQueueItem {
   failed_at: string | null;
 }
 
+export interface SpinRoundEntry {
+  id: string;
+  event_id: string;
+  participant_id: string;
+  round_number: number;
+  has_spun: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventSession {
+  id: string;
+  event_id: string;
+  current_round: number;
+  session_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EventTotals {
   totalSignedUp: number;
   checkedInCount: number;

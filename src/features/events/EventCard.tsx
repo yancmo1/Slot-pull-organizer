@@ -1,12 +1,45 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Modal } from '../../components/Modal'
 import { EventForm } from './EventForm'
 import { useEventStore } from '../../store/eventStore'
+import { db } from '../../lib/db'
 import type { Event } from '../../types'
 
 interface EventCardProps {
   event: Event
+}
+
+interface EventStats {
+  playerCount: number
+  checkedInCount: number
+  remainingOwed: number
+}
+
+function useEventStats(eventId: string): EventStats | null {
+  const [stats, setStats] = useState<EventStats | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    db.participants
+      .where('event_id')
+      .equals(eventId)
+      .filter(p => !p.deleted_at)
+      .toArray()
+      .then(participants => {
+        if (cancelled) return
+        const roster = participants.filter(p => !p.waitlist)
+        const checkedInCount = roster.filter(p => p.checked_in).length
+        const remainingOwed = roster.reduce(
+          (sum, p) => sum + Math.max(0, p.buy_in_amount - p.amount_paid),
+          0
+        )
+        setStats({ playerCount: roster.length, checkedInCount, remainingOwed })
+      })
+    return () => { cancelled = true }
+  }, [eventId])
+
+  return stats
 }
 
 export function EventCard({ event }: EventCardProps) {
@@ -14,6 +47,7 @@ export function EventCard({ event }: EventCardProps) {
   const { archiveEvent, deleteEvent, duplicateEvent } = useEventStore()
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const stats = useEventStats(event.id)
 
   const handleArchive = async () => {
     await archiveEvent(event.id)
@@ -48,6 +82,16 @@ export function EventCard({ event }: EventCardProps) {
               {event.location && <span>📍 {event.location}</span>}
               <span>💰 ${event.buy_in_amount}</span>
             </div>
+            {stats && (
+              <div className="flex gap-3 mt-2 text-xs text-slate-500">
+                <span>👥 {stats.playerCount} player{stats.playerCount !== 1 ? 's' : ''}</span>
+                <span>✓ {stats.checkedInCount} checked in</span>
+                {stats.remainingOwed > 0
+                  ? <span className="text-red-400">${stats.remainingOwed} owed</span>
+                  : <span className="text-green-400">$0 owed</span>
+                }
+              </div>
+            )}
           </button>
           <div className="relative">
             <button
