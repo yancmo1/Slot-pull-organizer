@@ -51,6 +51,11 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
                   +${(participant.amount_paid - participant.buy_in_amount).toFixed(2)}
                 </span>
               )}
+              {participant.payment_method && (
+                <span className="text-blue-400 text-xs bg-blue-900/30 px-1.5 py-0.5 rounded-full">
+                  {participant.payment_method}
+                </span>
+              )}
             </div>
           </div>
           <div className="relative flex-shrink-0">

@@ -12,6 +12,7 @@ function makeParticipant(overrides: Partial<Participant> = {}): Participant {
     buy_in_amount: 20,
     amount_paid: 0,
     payment_status: 'unpaid',
+    payment_method: null,
     checked_in: false,
     waitlist: false,
     notes: null,

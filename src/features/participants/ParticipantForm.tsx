@@ -19,6 +19,7 @@ export function ParticipantForm({ eventId, defaultBuyIn, participant, onSave, on
   const [alias_or_real_name, setAlias] = useState(participant?.alias_or_real_name ?? '')
   const [buy_in_amount, setBuyIn] = useState(String(participant?.buy_in_amount ?? defaultBuyIn))
   const [amount_paid, setAmountPaid] = useState(String(participant?.amount_paid ?? 0))
+  const [payment_method, setPaymentMethod] = useState(participant?.payment_method ?? '')
   const [waitlist, setWaitlist] = useState(participant?.waitlist ?? false)
   const [notes, setNotes] = useState(participant?.notes ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -44,6 +45,7 @@ export function ParticipantForm({ eventId, defaultBuyIn, participant, onSave, on
         alias_or_real_name: alias_or_real_name.trim() || null,
         buy_in_amount: Number(buy_in_amount),
         amount_paid: Number(amount_paid),
+        payment_method: payment_method.trim() || null,
         checked_in: participant?.checked_in ?? false,
         waitlist,
         notes: notes.trim() || null,
@@ -66,6 +68,23 @@ export function ParticipantForm({ eventId, defaultBuyIn, participant, onSave, on
       <Input label="Alias / Real Name" value={alias_or_real_name} onChange={(e) => setAlias(e.target.value)} placeholder="Jane Doe (optional)" />
       <Input label="Buy-In ($)" type="number" min="0" step="0.01" value={buy_in_amount} onChange={(e) => setBuyIn(e.target.value)} error={errors.buy_in_amount} />
       <Input label="Amount Paid ($)" type="number" min="0" step="0.01" value={amount_paid} onChange={(e) => setAmountPaid(e.target.value)} error={errors.amount_paid} />
+      <div className="flex flex-col gap-1.5">
+        <label className="text-slate-300 text-sm font-medium">Payment Method</label>
+        <select
+          value={payment_method}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">Not specified</option>
+          <option value="Cash">Cash</option>
+          <option value="Venmo">Venmo</option>
+          <option value="PayPal">PayPal</option>
+          <option value="Zelle">Zelle</option>
+          <option value="Check">Check</option>
+          <option value="Card">Card</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
       <div className="flex items-center gap-3 py-1">
         <input id="waitlist" type="checkbox" checked={waitlist} onChange={(e) => setWaitlist(e.target.checked)} className="w-5 h-5 rounded accent-blue-600" />
         <label htmlFor="waitlist" className="text-slate-300 text-base">Waitlist</label>
