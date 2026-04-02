@@ -13,6 +13,7 @@ export function EventListScreen() {
   const { events, loadEvents } = useEventStore()
   const [creating, setCreating] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => { loadEvents() }, [loadEvents])
 
@@ -26,7 +27,19 @@ export function EventListScreen() {
 
   const active = events.filter((e) => !e.archived)
   const archived = events.filter((e) => e.archived)
-  const displayed = showArchived ? archived : active
+  const baseDisplayed = showArchived ? archived : active
+
+  // Filter by search query
+  const displayed = searchQuery
+    ? baseDisplayed.filter((e) => {
+        const query = searchQuery.toLowerCase()
+        return (
+          e.title.toLowerCase().includes(query) ||
+          e.trip_label?.toLowerCase().includes(query) ||
+          e.location?.toLowerCase().includes(query)
+        )
+      })
+    : baseDisplayed
 
   return (
     <div className="min-h-screen bg-slate-900 text-white page-transition">
@@ -82,6 +95,17 @@ export function EventListScreen() {
           >
             Archived ({archived.length})
           </button>
+        </div>
+
+        {/* Search */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="🔍 Search events..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
         </div>
 
         {displayed.length === 0 ? (

@@ -5,6 +5,7 @@ import { useParticipantStore } from '../../store/participantStore'
 import { calculateTotals } from '../../lib/utils/totals'
 import { Button } from '../../components/Button'
 import { Input } from '../../components/Input'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import type { Participant } from '../../types'
 
 type Filter = 'all' | 'unpaid' | 'unchecked'
@@ -19,6 +20,7 @@ export function DayOfScreen() {
   const [spunParticipants, setSpunParticipants] = useState<Set<string>>(new Set())
   const [totalCredits, setTotalCredits] = useState('')
   const [showCalculator, setShowCalculator] = useState(false)
+  const [showCheckInAllConfirm, setShowCheckInAllConfirm] = useState(false)
 
   useEffect(() => {
     loadEvents()
@@ -56,6 +58,7 @@ export function DayOfScreen() {
   const handleCheckInAll = async () => {
     if (!id) return
     await checkInAll(id)
+    setShowCheckInAllConfirm(false)
   }
 
   const calculateWinnings = () => {
@@ -111,7 +114,7 @@ export function DayOfScreen() {
           <Button
             variant="secondary"
             size="md"
-            onClick={handleCheckInAll}
+            onClick={() => setShowCheckInAllConfirm(true)}
             className="flex-1"
           >
             ✓ Check All In
@@ -241,6 +244,15 @@ export function DayOfScreen() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showCheckInAllConfirm}
+        onClose={() => setShowCheckInAllConfirm(false)}
+        onConfirm={handleCheckInAll}
+        title="Check In All Participants"
+        message={`This will check in all ${roster.filter(p => !p.checked_in).length} unchecked participants. Are you sure?`}
+        confirmText="Check In All"
+      />
     </div>
   )
 }

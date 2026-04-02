@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Badge } from '../../components/Badge'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ParticipantForm } from './ParticipantForm'
 import { useParticipantStore } from '../../store/participantStore'
 import type { Participant } from '../../types'
@@ -14,6 +15,14 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
   const { toggleCheckedIn, deleteParticipant } = useParticipantStore()
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const isOverpaid = participant.amount_paid > participant.buy_in_amount
+
+  const handleDelete = () => {
+    deleteParticipant(participant.id)
+    setShowDeleteConfirm(false)
+  }
 
   return (
     <>
@@ -37,6 +46,16 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
             <div className="flex items-center gap-2 mt-1">
               <Badge status={participant.payment_status} />
               <span className="text-slate-400 text-xs">${participant.amount_paid}/${participant.buy_in_amount}</span>
+              {isOverpaid && (
+                <span className="text-green-400 text-xs bg-green-900/30 px-1.5 py-0.5 rounded-full">
+                  +${(participant.amount_paid - participant.buy_in_amount).toFixed(2)}
+                </span>
+              )}
+              {participant.payment_method && (
+                <span className="text-blue-400 text-xs bg-blue-900/30 px-1.5 py-0.5 rounded-full">
+                  {participant.payment_method}
+                </span>
+              )}
             </div>
           </div>
           <div className="relative flex-shrink-0">
@@ -49,7 +68,7 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 bg-slate-700 rounded-xl shadow-xl border border-slate-600 z-10 min-w-[150px]">
                 <button onClick={() => { setEditing(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600 rounded-t-xl">✏️ Edit</button>
-                <button onClick={() => { deleteParticipant(participant.id); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-red-400 hover:bg-slate-600 rounded-b-xl">🗑️ Remove</button>
+                <button onClick={() => { setShowDeleteConfirm(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-red-400 hover:bg-slate-600 rounded-b-xl">🗑️ Remove</button>
               </div>
             )}
           </div>
@@ -64,6 +83,15 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
           onCancel={() => setEditing(false)}
         />
       </Modal>
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Remove Participant"
+        message={`Are you sure you want to remove ${participant.display_name}? This action cannot be undone.`}
+        confirmText="Remove"
+        confirmVariant="danger"
+      />
     </>
   )
 }
