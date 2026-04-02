@@ -13,7 +13,7 @@ type Filter = 'all' | 'unpaid' | 'unchecked'
 export function DayOfScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, loadEvents } = useEventStore()
+  const { events, loading: eventsLoading, loaded: eventsLoaded, loadEvents } = useEventStore()
   const { participants, loadParticipants, toggleCheckedIn, markPaid, checkInAll } = useParticipantStore()
   const [filter, setFilter] = useState<Filter>('all')
   const [playMode, setPlayMode] = useState(false)
@@ -28,11 +28,18 @@ export function DayOfScreen() {
   }, [id, loadEvents, loadParticipants])
 
   const event = events.find((e) => e.id === id)
-  if (!event) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
+  if (!eventsLoaded || eventsLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
+  if (!event) return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
+      <p className="text-xl font-semibold">Event not found</p>
+      <button onClick={() => navigate('/')} className="text-blue-400 hover:text-blue-300 text-sm">← Back to events</button>
+    </div>
+  )
 
   const totals = calculateTotals(participants)
 
   const roster = participants.filter((p) => !p.waitlist)
+  const notCheckedInCount = roster.filter((p) => !p.checked_in).length
 
   // In play mode, only show checked-in participants
   const visibleRoster = playMode ? roster.filter((p) => p.checked_in) : roster
@@ -115,9 +122,10 @@ export function DayOfScreen() {
             variant="secondary"
             size="md"
             onClick={() => setShowCheckInAllConfirm(true)}
+            disabled={notCheckedInCount === 0}
             className="flex-1"
           >
-            ✓ Check All In
+            ✓ Check All In ({notCheckedInCount})
           </Button>
         </div>
 
@@ -250,7 +258,7 @@ export function DayOfScreen() {
         onClose={() => setShowCheckInAllConfirm(false)}
         onConfirm={handleCheckInAll}
         title="Check In All Participants"
-        message={`This will check in all ${roster.filter(p => !p.checked_in).length} unchecked participants. Are you sure?`}
+        message={`This will check in all ${notCheckedInCount} unchecked participants. Are you sure?`}
         confirmText="Check In All"
       />
     </div>

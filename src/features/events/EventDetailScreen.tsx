@@ -15,7 +15,7 @@ type SortBy = 'name' | 'payment' | 'checkin' | 'custom'
 export function EventDetailScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, loadEvents } = useEventStore()
+  const { events, loading: eventsLoading, loaded: eventsLoaded, loadEvents } = useEventStore()
   const { participants, loadParticipants } = useParticipantStore()
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
@@ -28,7 +28,13 @@ export function EventDetailScreen() {
   }, [id, loadEvents, loadParticipants])
 
   const event = events.find((e) => e.id === id)
-  if (!event) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
+  if (!eventsLoaded || eventsLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
+  if (!event) return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
+      <p className="text-xl font-semibold">Event not found</p>
+      <button onClick={() => navigate('/')} className="text-blue-400 hover:text-blue-300 text-sm">← Back to events</button>
+    </div>
+  )
 
   const totals = calculateTotals(participants)
 
