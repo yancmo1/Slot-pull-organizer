@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
+import { useSpinRoundStore } from '../../store/spinRoundStore'
 import { calculateTotals } from '../../lib/utils/totals'
 import { Button } from '../../components/Button'
 import { NumberPad } from '../../components/NumberPad'
@@ -15,36 +16,63 @@ export function DayOfScreen() {
   const navigate = useNavigate()
   const { events, loading: eventsLoading, loaded: eventsLoaded, loadEvents } = useEventStore()
   const { participants, loadParticipants, toggleCheckedIn, markPaid, checkInAll } = useParticipantStore()
+  const {
+    currentRound,
+    sessionActive,
+    sessionLoading,
+    loadSession,
+    markSpun,
+    unmarkSpun,
+    startNextRound,
+    endSession,
+    resumeSession,
+    isSpunInCurrentRound,
+    getSpunIdsForRound,
+  } = useSpinRoundStore()
+
   const [filter, setFilter] = useState<Filter>('all')
   const [playMode, setPlayMode] = useState(false)
-  const [spunParticipants, setSpunParticipants] = useState<Set<string>>(new Set())
-  const [currentRound, setCurrentRound] = useState(1)
   const [totalCredits, setTotalCredits] = useState('')
   const [showCalculator, setShowCalculator] = useState(false)
   const [showCheckInAllConfirm, setShowCheckInAllConfirm] = useState(false)
   const [showNextRoundConfirm, setShowNextRoundConfirm] = useState(false)
+  const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false)
+  const stickyRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadEvents()
-    if (id) loadParticipants(id)
-  }, [id, loadEvents, loadParticipants])
+    if (id) {
+      loadParticipants(id)
+      loadSession(id)
+    }
+  }, [id, loadEvents, loadParticipants, loadSession])
 
   const event = events.find((e) => e.id === id)
-  if (!eventsLoaded || eventsLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
-  if (!event) return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
-      <p className="text-xl font-semibold">Event not found</p>
-      <button onClick={() => navigate('/')} className="text-blue-400 hover:text-blue-300 text-sm">← Back to events</button>
-    </div>
-  )
+  if (!eventsLoaded || eventsLoading || sessionLoading) {
+    return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
+  }
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
+        <p className="text-xl font-semibold">Event not found</p>
+        <button onClick={() => navigate('/')} className="text-blue-400 hover:text-blue-300 text-sm">← Back to events</button>
+      </div>
+    )
+  }
 
   const totals = calculateTotals(participants)
-
   const roster = participants.filter((p) => !p.waitlist)
   const notCheckedInCount = roster.filter((p) => !p.checked_in).length
 
+  // Derived round state
+  const currentRoundSpunIds = getSpunIdsForRound(currentRound)
+  const checkedInRoster = roster.filter(p => p.checked_in)
+  const currentRoundSpunCount = checkedInRoster.filter(p => currentRoundSpunIds.has(p.id)).length
+  const currentRoundRemainingCount = checkedInRoster.length - currentRoundSpunCount
+  const allCurrentRoundSpun = checkedInRoster.length > 0 && currentRoundRemainingCount === 0
+
   // In play mode, only show checked-in participants
-  const visibleRoster = playMode ? roster.filter((p) => p.checked_in) : roster
+  const visibleRoster = playMode ? checkedInRoster : roster
 
   const filtered = visibleRoster.filter((p) => {
     if (filter === 'unpaid') return p.payment_status !== 'paid'
@@ -55,28 +83,38 @@ export function DayOfScreen() {
   // In play mode, spun players sink to the bottom; unspun stay at the top
   const sortedFiltered = playMode
     ? [...filtered].sort((a, b) => {
-        const aSpun = spunParticipants.has(a.id) ? 1 : 0
-        const bSpun = spunParticipants.has(b.id) ? 1 : 0
+        const aSpun = currentRoundSpunIds.has(a.id) ? 1 : 0
+        const bSpun = currentRoundSpunIds.has(b.id) ? 1 : 0
         return aSpun - bSpun
       })
     : filtered
 
-  const handleToggleSpin = (participantId: string) => {
-    setSpunParticipants(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(participantId)) {
-        newSet.delete(participantId)
-      } else {
-        newSet.add(participantId)
-      }
-      return newSet
-    })
+  const handleToggleSpin = async (participantId: string) => {
+    if (!id) return
+    if (isSpunInCurrentRound(participantId)) {
+      await unmarkSpun(id, participantId)
+    } else {
+      await markSpun(id, participantId)
+    }
   }
 
-  const handleNextRound = () => {
-    setCurrentRound(prev => prev + 1)
-    setSpunParticipants(new Set())
+  const handleNextRound = async () => {
+    if (!id) return
+    await startNextRound(id)
     setShowNextRoundConfirm(false)
+  }
+
+  const handleEndSession = async () => {
+    if (!id) return
+    await endSession(id)
+    setPlayMode(false)
+    setShowEndSessionConfirm(false)
+  }
+
+  const handleResumeSession = async () => {
+    if (!id) return
+    await resumeSession(id)
+    setPlayMode(true)
   }
 
   const handleCheckInAll = async () => {
@@ -115,88 +153,154 @@ export function DayOfScreen() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      <div className="max-w-lg mx-auto px-4 py-4">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-4">
+      <div className="max-w-lg mx-auto">
+        {/* Header — not sticky */}
+        <div className="px-4 pt-4 pb-2 flex items-center gap-3">
           <button onClick={() => navigate(`/event/${id}`)} className="text-slate-400 hover:text-white p-2 -ml-2">←</button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-white">☀️ Day-of Mode</h1>
             <p className="text-slate-400 text-sm truncate">{event.title}</p>
           </div>
         </div>
 
-        {/* Play Mode Toggle & Check In All */}
-        <div className="flex gap-2 mb-4">
-          <Button
-            variant={playMode ? 'primary' : 'secondary'}
-            size="md"
-            onClick={() => setPlayMode(!playMode)}
-            className="flex-1"
-          >
-            {playMode ? '🎮 Play Mode ON' : '🎮 Play Mode'}
-          </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setShowCheckInAllConfirm(true)}
-            disabled={notCheckedInCount === 0}
-            className="flex-1"
-          >
-            ✓ Check All In ({notCheckedInCount})
-          </Button>
-        </div>
-
-        {/* Round indicator + Next Round button (play mode only) */}
-        {playMode && (
-          <div className="flex items-center justify-between bg-slate-800 rounded-2xl px-4 py-3 mb-4 border border-slate-700">
-            <span className="text-white font-semibold">
-              🔄 Round <span className="text-blue-400 font-bold">{currentRound}</span>
-            </span>
+        {/* Sticky control cluster */}
+        <div
+          ref={stickyRef}
+          className="sticky top-0 z-20 bg-slate-900 border-b border-slate-800 px-4 pb-3 pt-1 space-y-2"
+        >
+          {/* Play Mode Toggle & Check All In */}
+          <div className="flex gap-2">
+            <Button
+              variant={playMode ? 'primary' : 'secondary'}
+              size="md"
+              onClick={() => {
+                if (!playMode && !sessionActive) {
+                  handleResumeSession()
+                } else {
+                  setPlayMode(!playMode)
+                }
+              }}
+              className="flex-1"
+            >
+              {playMode ? '🎮 Play Mode ON' : '🎮 Play Mode'}
+            </Button>
             <Button
               variant="secondary"
               size="md"
-              onClick={() => setShowNextRoundConfirm(true)}
+              onClick={() => setShowCheckInAllConfirm(true)}
+              disabled={notCheckedInCount === 0}
+              className="flex-1"
             >
-              Next Round →
+              ✓ Check All In ({notCheckedInCount})
             </Button>
+          </div>
+
+          {/* Round bar (play mode only) */}
+          {playMode && (
+            <div className="bg-slate-800 rounded-xl px-3 py-2 border border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-white font-semibold text-sm">
+                    🔄 Round <span className="text-blue-400 font-bold">{currentRound}</span>
+                  </span>
+                  <span className="text-slate-400 text-xs ml-2">
+                    {currentRoundSpunCount} of {checkedInRoster.length} spun
+                    {currentRoundRemainingCount > 0 && ` · ${currentRoundRemainingCount} remaining`}
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  {allCurrentRoundSpun ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setShowNextRoundConfirm(true)}
+                    >
+                      Start Round {currentRound + 1} →
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowEndSessionConfirm(true)}
+                    >
+                      End Session
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {/* Progress bar */}
+              {checkedInRoster.length > 0 && (
+                <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                    style={{ width: `${(currentRoundSpunCount / checkedInRoster.length) * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Live Totals Bar */}
+          <div className="bg-slate-800 rounded-xl p-2.5 grid grid-cols-4 gap-1 text-center border border-slate-700">
+            <div>
+              <div className="text-white font-bold text-lg leading-tight">{totals.checkedInCount}</div>
+              <div className="text-slate-400 text-xs">In</div>
+            </div>
+            <div>
+              <div className="text-white font-bold text-lg leading-tight">{totals.totalSignedUp - totals.checkedInCount}</div>
+              <div className="text-slate-400 text-xs">Absent</div>
+            </div>
+            <div>
+              <div className="text-green-400 font-bold text-lg leading-tight">${totals.collectedTotal}</div>
+              <div className="text-slate-400 text-xs">Collected</div>
+            </div>
+            <div>
+              <div className="text-red-400 font-bold text-lg leading-tight">${totals.remainingUnpaid}</div>
+              <div className="text-slate-400 text-xs">Owed</div>
+            </div>
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex gap-2">
+            {(['all', 'unpaid', 'unchecked'] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors ${filter === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+              >
+                {f === 'all' ? `All (${roster.length})` : f === 'unpaid' ? `Unpaid` : `Not In`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* "Everyone has spun" banner */}
+        {playMode && allCurrentRoundSpun && (
+          <div className="mx-4 mt-3 bg-green-900/40 border border-green-700 rounded-xl px-4 py-3 text-center">
+            <p className="text-green-300 font-semibold text-sm">🎉 Everyone has spun this round!</p>
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant="primary"
+                size="md"
+                className="flex-1"
+                onClick={() => setShowNextRoundConfirm(true)}
+              >
+                Start Round {currentRound + 1}
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                className="flex-1"
+                onClick={() => setShowEndSessionConfirm(true)}
+              >
+                End Session
+              </Button>
+            </div>
           </div>
         )}
 
-        {/* Live Totals Bar */}
-        <div className="bg-slate-800 rounded-2xl p-3 mb-4 grid grid-cols-4 gap-2 text-center">
-          <div>
-            <div className="text-white font-bold text-xl">{totals.checkedInCount}</div>
-            <div className="text-slate-400 text-xs">In</div>
-          </div>
-          <div>
-            <div className="text-white font-bold text-xl">{totals.totalSignedUp - totals.checkedInCount}</div>
-            <div className="text-slate-400 text-xs">Absent</div>
-          </div>
-          <div>
-            <div className="text-green-400 font-bold text-xl">${totals.collectedTotal}</div>
-            <div className="text-slate-400 text-xs">Collected</div>
-          </div>
-          <div>
-            <div className="text-red-400 font-bold text-xl">${totals.remainingUnpaid}</div>
-            <div className="text-slate-400 text-xs">Owed</div>
-          </div>
-        </div>
-
-        {/* Filter */}
-        <div className="flex gap-2 mb-4">
-          {(['all', 'unpaid', 'unchecked'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${filter === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
-            >
-              {f === 'all' ? `All (${roster.length})` : f === 'unpaid' ? `Unpaid` : `Not In`}
-            </button>
-          ))}
-        </div>
-
-        {/* Participant cards - large touch targets */}
-        <div className="flex flex-col gap-3">
+        {/* Participant cards */}
+        <div className="px-4 pt-3 flex flex-col gap-2">
           {sortedFiltered.map((p) => (
             <DayOfParticipantCard
               key={p.id}
@@ -204,28 +308,34 @@ export function DayOfScreen() {
               onCheckin={() => toggleCheckedIn(p.id)}
               onPaid={() => markPaid(p.id)}
               playMode={playMode}
-              hasSpun={spunParticipants.has(p.id)}
+              hasSpun={currentRoundSpunIds.has(p.id)}
               onToggleSpin={() => handleToggleSpin(p.id)}
             />
           ))}
+          {sortedFiltered.length === 0 && (
+            <div className="text-center py-8 text-slate-500 text-sm">No participants match this filter</div>
+          )}
         </div>
 
         {/* Waitlist */}
         {participants.filter(p => p.waitlist).length > 0 && (
-          <div className="mt-6">
+          <div className="px-4 mt-4">
             <h2 className="text-slate-400 text-sm font-medium mb-2">Waitlist ({participants.filter(p => p.waitlist).length})</h2>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {participants.filter(p => p.waitlist).map((p) => (
-                <div key={p.id} className="bg-slate-800 rounded-xl p-3 border border-slate-700">
-                  <span className="text-slate-300">{p.display_name}</span>
+                <div key={p.id} className="bg-slate-800 rounded-xl px-3 py-2 border border-slate-700">
+                  <span className="text-slate-300 text-sm">{p.display_name}</span>
+                  {p.alias_or_real_name && (
+                    <span className="text-slate-500 text-xs ml-2">{p.alias_or_real_name}</span>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Calculator Section */}
-        <div className="mt-6 mb-6">
+        {/* Winnings Calculator */}
+        <div className="px-4 mt-4 mb-6">
           <Button
             variant="secondary"
             size="lg"
@@ -236,8 +346,9 @@ export function DayOfScreen() {
           </Button>
 
           {showCalculator && (
-            <div className="mt-4 bg-slate-800 rounded-2xl p-4 border border-slate-700">
-              <h2 className="text-white text-lg font-bold mb-4">💰 Winnings Calculator</h2>
+            <div className="mt-3 bg-slate-800 rounded-2xl p-4 border border-slate-700">
+              <h2 className="text-white text-lg font-bold mb-1">💰 Winnings Calculator</h2>
+              <p className="text-slate-500 text-xs mb-4">Based on {totals.checkedInCount} checked-in players · not affected by round</p>
 
               <div className="mb-4">
                 <p className="text-sm font-medium text-slate-300 mb-2">Total Credits Won</p>
@@ -293,15 +404,31 @@ export function DayOfScreen() {
         open={showNextRoundConfirm}
         onClose={() => setShowNextRoundConfirm(false)}
         onConfirm={handleNextRound}
-        title="Start Next Round"
-        message={`This will clear all spun markers and begin Round ${currentRound + 1}. Are you sure?`}
-        confirmText="Start Round"
+        title={`Start Round ${currentRound + 1}`}
+        message={`This will begin Round ${currentRound + 1}. All spin markers for Round ${currentRound} are preserved in history. Are you sure?`}
+        confirmText={`Start Round ${currentRound + 1}`}
+      />
+
+      <ConfirmDialog
+        open={showEndSessionConfirm}
+        onClose={() => setShowEndSessionConfirm(false)}
+        onConfirm={handleEndSession}
+        title="End Session"
+        message="This will end the play session. All round data will be preserved. You can resume play later."
+        confirmText="End Session"
       />
     </div>
   )
 }
 
-function DayOfParticipantCard({ participant, onCheckin, onPaid, playMode, hasSpun, onToggleSpin }: {
+function DayOfParticipantCard({
+  participant,
+  onCheckin,
+  onPaid,
+  playMode,
+  hasSpun,
+  onToggleSpin,
+}: {
   participant: Participant
   onCheckin: () => void
   onPaid: () => void
@@ -310,31 +437,54 @@ function DayOfParticipantCard({ participant, onCheckin, onPaid, playMode, hasSpu
   onToggleSpin?: () => void
 }) {
   const isPaid = participant.payment_status === 'paid'
+  const isPartial = participant.payment_status === 'partial'
+
+  const paymentBadgeClass = isPaid
+    ? 'bg-green-900 text-green-200'
+    : isPartial
+    ? 'bg-yellow-900 text-yellow-200'
+    : 'bg-red-900 text-red-200'
+
+  const paymentBadgeText = isPaid
+    ? 'Paid'
+    : `$${participant.amount_paid}/$${participant.buy_in_amount}`
+
   return (
-    <div className={`bg-slate-800 rounded-2xl p-4 border-2 transition-colors ${
-      hasSpun ? 'border-purple-600 bg-purple-900/20' :
-      participant.checked_in ? 'border-green-700' : 'border-slate-700'
-    }`}>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-white font-semibold text-lg">{participant.display_name}</p>
-          {participant.alias_or_real_name && <p className="text-slate-400 text-sm">{participant.alias_or_real_name}</p>}
+    <div
+      className={`bg-slate-800 rounded-xl px-3 py-2.5 border-2 transition-colors ${
+        hasSpun
+          ? 'border-purple-600 bg-purple-900/20'
+          : participant.checked_in
+          ? 'border-green-700'
+          : 'border-slate-700'
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex-1 min-w-0 mr-2">
+          <p className="text-white font-semibold text-base leading-tight truncate">
+            {participant.display_name}
+          </p>
+          {participant.alias_or_real_name && (
+            <p className="text-slate-400 text-xs leading-tight mt-0.5 truncate">
+              {participant.alias_or_real_name}
+            </p>
+          )}
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1 shrink-0">
           {hasSpun && (
             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-900 text-purple-200">
               ✓ Spun
             </span>
           )}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isPaid ? 'bg-green-900 text-green-200' : participant.payment_status === 'partial' ? 'bg-yellow-900 text-yellow-200' : 'bg-red-900 text-red-200'}`}>
-            {isPaid ? 'paid' : `$${participant.amount_paid}/$${participant.buy_in_amount}`}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${paymentBadgeClass}`}>
+            {paymentBadgeText}
           </span>
         </div>
       </div>
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         {playMode && onToggleSpin ? (
           <Button
-            size="lg"
+            size="md"
             variant={hasSpun ? 'primary' : 'secondary'}
             className="flex-1"
             onClick={onToggleSpin}
@@ -344,7 +494,7 @@ function DayOfParticipantCard({ participant, onCheckin, onPaid, playMode, hasSpu
         ) : (
           <>
             <Button
-              size="lg"
+              size="md"
               variant={participant.checked_in ? 'primary' : 'secondary'}
               className="flex-1"
               onClick={onCheckin}
@@ -353,7 +503,7 @@ function DayOfParticipantCard({ participant, onCheckin, onPaid, playMode, hasSpu
             </Button>
             {!isPaid && (
               <Button
-                size="lg"
+                size="md"
                 variant="secondary"
                 className="flex-1"
                 onClick={onPaid}
