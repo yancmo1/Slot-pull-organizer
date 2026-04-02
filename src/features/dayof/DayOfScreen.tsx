@@ -7,6 +7,8 @@ import { calculateTotals } from '../../lib/utils/totals'
 import { Button } from '../../components/Button'
 import { NumberPad } from '../../components/NumberPad'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { Modal } from '../../components/Modal'
+import { calculateBillBreakdown, DENOMINATIONS } from '../../lib/utils/billBreakdown'
 import type { Participant } from '../../types'
 
 type Filter = 'all' | 'unpaid' | 'unchecked'
@@ -34,6 +36,7 @@ export function DayOfScreen() {
   const [playMode, setPlayMode] = useState(false)
   const [totalCredits, setTotalCredits] = useState('')
   const [showCalculator, setShowCalculator] = useState(false)
+  const [showBillBreakdown, setShowBillBreakdown] = useState(false)
   const [showCheckInAllConfirm, setShowCheckInAllConfirm] = useState(false)
   const [showNextRoundConfirm, setShowNextRoundConfirm] = useState(false)
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false)
@@ -377,6 +380,14 @@ export function DayOfScreen() {
                   <div className="bg-blue-900/30 rounded-xl p-4 border-2 border-blue-600">
                     <div className="text-blue-300 text-sm">Per Person ({winnings.checkedInCount} checked in)</div>
                     <div className="text-blue-100 text-3xl font-bold">${winnings.perPerson.toFixed(2)}</div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-3 w-full"
+                      onClick={() => setShowBillBreakdown(true)}
+                    >
+                      💵 Bill Breakdown
+                    </Button>
                   </div>
                 </div>
               )}
@@ -417,6 +428,15 @@ export function DayOfScreen() {
         message="This will end the play session. All round data will be preserved. You can resume play later."
         confirmText="End Session"
       />
+
+      {winnings && (
+        <BillBreakdownModal
+          open={showBillBreakdown}
+          onClose={() => setShowBillBreakdown(false)}
+          perPerson={winnings.perPerson}
+          checkedInCount={winnings.checkedInCount}
+        />
+      )}
     </div>
   )
 }
@@ -515,5 +535,93 @@ function DayOfParticipantCard({
         )}
       </div>
     </div>
+  )
+}
+
+function BillBreakdownModal({
+  open,
+  onClose,
+  perPerson,
+  checkedInCount,
+}: {
+  open: boolean
+  onClose: () => void
+  perPerson: number
+  checkedInCount: number
+}) {
+  const perPersonBreakdown = calculateBillBreakdown(perPerson)
+  const totalBreakdown = calculateBillBreakdown(perPerson * checkedInCount)
+
+  return (
+    <Modal open={open} onClose={onClose} title="💵 Bill Breakdown">
+      <div className="space-y-4">
+        <p className="text-slate-400 text-sm">
+          How many bills you need to pay each person and in total.
+        </p>
+
+        {/* Per person breakdown */}
+        <div>
+          <h3 className="text-white font-semibold text-sm mb-2">
+            Per Person — ${Math.floor(perPerson).toFixed(0)}
+            {perPersonBreakdown.remainder > 0 && (
+              <span className="text-slate-400 text-xs ml-1">
+                (${perPerson.toFixed(2)} rounded down)
+              </span>
+            )}
+          </h3>
+          <div className="grid grid-cols-5 gap-1.5">
+            {DENOMINATIONS.map((denom) => (
+              <div
+                key={denom}
+                className={`rounded-xl p-2 text-center border ${
+                  perPersonBreakdown[denom] > 0
+                    ? 'bg-green-900/30 border-green-700'
+                    : 'bg-slate-800 border-slate-700 opacity-40'
+                }`}
+              >
+                <div className="text-slate-300 text-xs">${denom}</div>
+                <div className="text-white font-bold text-lg leading-tight">
+                  {perPersonBreakdown[denom]}
+                </div>
+              </div>
+            ))}
+          </div>
+          {perPersonBreakdown.remainder > 0 && (
+            <p className="text-slate-500 text-xs mt-1.5">
+              + ${perPersonBreakdown.remainder.toFixed(2)} remaining per person
+            </p>
+          )}
+        </div>
+
+        {/* Total breakdown */}
+        <div>
+          <h3 className="text-white font-semibold text-sm mb-2">
+            Total for All {checkedInCount} Players — ${Math.floor(perPerson * checkedInCount).toFixed(0)}
+          </h3>
+          <div className="grid grid-cols-5 gap-1.5">
+            {DENOMINATIONS.map((denom) => (
+              <div
+                key={denom}
+                className={`rounded-xl p-2 text-center border ${
+                  totalBreakdown[denom] > 0
+                    ? 'bg-blue-900/30 border-blue-700'
+                    : 'bg-slate-800 border-slate-700 opacity-40'
+                }`}
+              >
+                <div className="text-slate-300 text-xs">${denom}</div>
+                <div className="text-white font-bold text-lg leading-tight">
+                  {totalBreakdown[denom]}
+                </div>
+              </div>
+            ))}
+          </div>
+          {totalBreakdown.remainder > 0 && (
+            <p className="text-slate-500 text-xs mt-1.5">
+              + ${totalBreakdown.remainder.toFixed(2)} remaining total
+            </p>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
