@@ -10,6 +10,7 @@ import { calculateTotals } from '../../lib/utils/totals'
 import { exportEventToCSV } from '../../lib/utils/export'
 
 type Filter = 'all' | 'unpaid' | 'checked-in' | 'waitlist'
+type SortBy = 'name' | 'payment' | 'checkin' | 'custom'
 
 export function EventDetailScreen() {
   const { id } = useParams<{ id: string }>()
@@ -18,6 +19,8 @@ export function EventDetailScreen() {
   const { participants, loadParticipants } = useParticipantStore()
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<SortBy>('custom')
 
   useEffect(() => {
     loadEvents()
@@ -29,11 +32,47 @@ export function EventDetailScreen() {
 
   const totals = calculateTotals(participants)
 
+  // Calculate capacity status
+  const nonWaitlistCount = participants.filter(p => !p.waitlist).length
+  const maxPlayers = event.max_players
+  const isAtCapacity = maxPlayers !== null && nonWaitlistCount >= maxPlayers
+  const isNearCapacity = maxPlayers !== null && nonWaitlistCount >= maxPlayers * 0.9 && !isAtCapacity
+
   const filtered = participants.filter((p) => {
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesName = p.display_name.toLowerCase().includes(query)
+      const matchesAlias = p.alias_or_real_name?.toLowerCase().includes(query)
+      if (!matchesName && !matchesAlias) return false
+    }
+
+    // Filter by status
     if (filter === 'unpaid') return p.payment_status !== 'paid' && !p.waitlist
     if (filter === 'checked-in') return p.checked_in
     if (filter === 'waitlist') return p.waitlist
     return true
+  })
+
+  // Sort participants
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case 'name':
+        return a.display_name.localeCompare(b.display_name)
+      case 'payment': {
+        const statusOrder = { unpaid: 0, partial: 1, paid: 2 }
+        return statusOrder[a.payment_status] - statusOrder[b.payment_status]
+      }
+      case 'checkin':
+        return (a.checked_in ? 1 : 0) - (b.checked_in ? 1 : 0)
+      case 'custom':
+      default:
+        // Use sort_order if available, otherwise maintain insertion order
+        if (a.sort_order !== null && b.sort_order !== null) {
+          return a.sort_order - b.sort_order
+        }
+        return 0
+    }
   })
 
   const filters: { key: Filter; label: string }[] = [
@@ -60,7 +99,7 @@ export function EventDetailScreen() {
         {/* Totals */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
-            { label: 'Signed Up', value: totals.totalSignedUp },
+            { label: 'Signed Up', value: totals.totalSignedUp, suffix: maxPlayers ? `/${maxPlayers}` : '' },
             { label: 'Checked In', value: totals.checkedInCount },
             { label: 'Waitlist', value: totals.waitlistCount },
             { label: 'Expected', value: `$${totals.expectedTotal}` },
@@ -68,11 +107,31 @@ export function EventDetailScreen() {
             { label: 'Remaining', value: `$${totals.remainingUnpaid}` },
           ].map((stat) => (
             <div key={stat.label} className="bg-slate-800 rounded-xl p-3 text-center">
-              <div className="text-white font-bold text-lg">{stat.value}</div>
+              <div className="text-white font-bold text-lg">{stat.value}{stat.suffix || ''}</div>
               <div className="text-slate-400 text-xs">{stat.label}</div>
             </div>
           ))}
         </div>
+
+        {/* Capacity warnings */}
+        {isAtCapacity && (
+          <div className="bg-red-900/30 border border-red-500 rounded-xl p-3 mb-4 flex items-center gap-2">
+            <span className="text-lg">🚫</span>
+            <div className="flex-1">
+              <p className="text-red-300 font-medium text-sm">Event at capacity</p>
+              <p className="text-red-400 text-xs">New participants will be added to waitlist</p>
+            </div>
+          </div>
+        )}
+        {isNearCapacity && (
+          <div className="bg-yellow-900/30 border border-yellow-500 rounded-xl p-3 mb-4 flex items-center gap-2">
+            <span className="text-lg">⚠️</span>
+            <div className="flex-1">
+              <p className="text-yellow-300 font-medium text-sm">Near capacity</p>
+              <p className="text-yellow-400 text-xs">{maxPlayers! - nonWaitlistCount} spot{maxPlayers! - nonWaitlistCount !== 1 ? 's' : ''} remaining</p>
+            </div>
+          </div>
+        )}
 
         {/* Filter tabs */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
@@ -87,6 +146,38 @@ export function EventDetailScreen() {
           ))}
         </div>
 
+        {/* Search */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="🔍 Search participants..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        {/* Sort */}
+        <div className="mb-4">
+          <label className="text-slate-400 text-xs mb-2 block">Sort by</label>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {[
+              { key: 'custom' as SortBy, label: 'Custom Order' },
+              { key: 'name' as SortBy, label: 'Name (A-Z)' },
+              { key: 'payment' as SortBy, label: 'Payment Status' },
+              { key: 'checkin' as SortBy, label: 'Check-in' },
+            ].map((sort) => (
+              <button
+                key={sort.key}
+                onClick={() => setSortBy(sort.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${sortBy === sort.key ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+              >
+                {sort.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Actions */}
         <div className="flex gap-2 mb-4">
           <Button size="sm" className="flex-1" onClick={() => setAdding(true)}>+ Add Participant</Button>
@@ -94,13 +185,13 @@ export function EventDetailScreen() {
         </div>
 
         {/* Participant list */}
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="text-center py-12 text-slate-500">
             <p>No participants found</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map((p) => (
+            {sorted.map((p) => (
               <ParticipantRow key={p.id} participant={p} defaultBuyIn={event.buy_in_amount} />
             ))}
           </div>

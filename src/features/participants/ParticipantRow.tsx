@@ -15,6 +15,8 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
+  const isOverpaid = participant.amount_paid > participant.buy_in_amount
+
   return (
     <>
       <div className={`bg-slate-800 rounded-xl p-3 border ${participant.waitlist ? 'border-slate-600' : 'border-slate-700'}`}>
@@ -37,6 +39,11 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
             <div className="flex items-center gap-2 mt-1">
               <Badge status={participant.payment_status} />
               <span className="text-slate-400 text-xs">${participant.amount_paid}/${participant.buy_in_amount}</span>
+              {isOverpaid && (
+                <span className="text-green-400 text-xs bg-green-900/30 px-1.5 py-0.5 rounded-full">
+                  +${(participant.amount_paid - participant.buy_in_amount).toFixed(2)}
+                </span>
+              )}
             </div>
           </div>
           <div className="relative flex-shrink-0">
