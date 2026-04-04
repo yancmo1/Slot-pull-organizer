@@ -3,6 +3,7 @@ import { Input } from '../../components/Input'
 import { Textarea } from '../../components/Textarea'
 import { Button } from '../../components/Button'
 import { useParticipantStore } from '../../store/participantStore'
+import { capitalizeWords } from '../../lib/utils/formatName'
 import type { Participant } from '../../types'
 
 interface ParticipantFormProps {
@@ -64,8 +65,8 @@ export function ParticipantForm({ eventId, defaultBuyIn, participant, onSave, on
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Input label="Display Name *" value={display_name} onChange={(e) => setDisplayName(e.target.value)} error={errors.display_name} placeholder="Jane D." />
-      <Input label="Alias / Real Name" value={alias_or_real_name} onChange={(e) => setAlias(e.target.value)} placeholder="Jane Doe (optional)" />
+      <Input label="Display Name *" value={display_name} onChange={(e) => setDisplayName(capitalizeWords(e.target.value))} error={errors.display_name} placeholder="Jane D." />
+      <Input label="Alias / Real Name" value={alias_or_real_name} onChange={(e) => setAlias(capitalizeWords(e.target.value))} placeholder="Jane Doe (optional)" />
       <Input label="Buy-In ($)" type="number" min="0" step="0.01" value={buy_in_amount} onChange={(e) => setBuyIn(e.target.value)} error={errors.buy_in_amount} />
       <Input label="Amount Paid ($)" type="number" min="0" step="0.01" value={amount_paid} onChange={(e) => setAmountPaid(e.target.value)} error={errors.amount_paid} />
       <div className="flex flex-col gap-1.5">
