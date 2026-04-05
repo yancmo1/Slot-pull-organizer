@@ -1,21 +1,21 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../../components/Button'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useEventStore } from '../../store/eventStore'
-import { useParticipantStore } from '../../store/participantStore'
 import { exportAllToJSON, importFromJSON } from '../../lib/utils/export'
 import { db } from '../../lib/db'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
-  const { events, loadEvents } = useEventStore()
-  const { participants } = useParticipantStore()
+  const { loadEvents } = useEventStore()
   const fileRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
-  const handleExportJSON = () => {
-    exportAllToJSON(events, participants)
+  const handleExportJSON = async () => {
+    await exportAllToJSON()
     setMessage({ type: 'success', text: 'Backup exported successfully!' })
   }
 
@@ -26,9 +26,14 @@ export function SettingsScreen() {
     setMessage(null)
     try {
       const data = await importFromJSON(file)
-      if (confirm(`Import ${data.events.length} events and ${data.participants.length} participants? This will merge with existing data.`)) {
-        await db.events.bulkPut(data.events)
-        await db.participants.bulkPut(data.participants)
+      if (confirm(`Import ${data.events.length} events and ${data.participants.length} participants? Your current data will be downloaded as a safety backup first.`)) {
+        await exportAllToJSON()
+        await db.transaction('rw', [db.events, db.participants, db.spinRoundEntries, db.eventSessions], async () => {
+          await db.events.bulkPut(data.events)
+          await db.participants.bulkPut(data.participants)
+          await db.spinRoundEntries.bulkPut(data.spinRoundEntries)
+          await db.eventSessions.bulkPut(data.eventSessions)
+        })
         await loadEvents()
         setMessage({ type: 'success', text: `Imported ${data.events.length} events and ${data.participants.length} participants.` })
       }
@@ -38,6 +43,15 @@ export function SettingsScreen() {
       setImporting(false)
       if (fileRef.current) fileRef.current.value = ''
     }
+  }
+
+  const handleClearAllData = async () => {
+    await db.events.clear()
+    await db.participants.clear()
+    await db.syncQueue.clear()
+    await db.spinRoundEntries.clear()
+    await db.eventSessions.clear()
+    window.location.replace('/')
   }
 
   return (
@@ -70,12 +84,35 @@ export function SettingsScreen() {
           </div>
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
+            <h2 className="text-white font-semibold mb-1">🔒 Privacy Notice</h2>
+            <p className="text-slate-400 text-sm">All data is stored locally on this device. JSON backups are not encrypted and contain participant names and payment details. Do not share backup files with untrusted parties.</p>
+          </div>
+
+          <div className="bg-slate-800 rounded-2xl p-4 border border-red-900/40">
+            <h2 className="text-white font-semibold mb-1">⚠️ Danger Zone</h2>
+            <p className="text-slate-400 text-sm mb-4">Permanently erase all events, participants, and session data from this device. This cannot be undone.</p>
+            <Button variant="secondary" className="w-full text-red-400 border-red-800" onClick={() => setClearConfirmOpen(true)}>
+              🗑️ Clear All Local Data
+            </Button>
+          </div>
+
+          <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
             <h2 className="text-white font-semibold mb-1">About</h2>
             <p className="text-slate-400 text-sm">Cruise Slot Pull Organizer — offline-first PWA. All data is stored locally on your device.</p>
             <p className="text-slate-500 text-xs mt-2">v1.0.0</p>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        onConfirm={handleClearAllData}
+        title="Clear All Local Data"
+        message="This will permanently delete all events, participants, and session data from this device. This cannot be undone."
+        confirmText="Clear All Data"
+        confirmVariant="danger"
+      />
     </div>
   )
 }
