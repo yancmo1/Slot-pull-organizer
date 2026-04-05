@@ -55,7 +55,7 @@ export function EventCard({ event }: EventCardProps) {
   }
 
   const handleDelete = async () => {
-    if (confirm('Delete this event? This cannot be undone.')) {
+    if (confirm('Delete this event and all its participants? This cannot be undone.')) {
       await deleteEvent(event.id)
     }
     setMenuOpen(false)

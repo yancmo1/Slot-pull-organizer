@@ -25,3 +25,15 @@ export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
     .filter((item) => item.synced_at === null)
     .toArray()
 }
+
+export async function purgeSyncQueue(maxAgeDays = 30): Promise<number> {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - maxAgeDays)
+  const cutoffISO = cutoff.toISOString()
+  const old = await db.syncQueue
+    .filter((item) => item.created_at < cutoffISO)
+    .toArray()
+  if (old.length === 0) return 0
+  await db.syncQueue.bulkDelete(old.map((item) => item.id))
+  return old.length
+}

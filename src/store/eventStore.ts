@@ -59,9 +59,10 @@ export const useEventStore = create<EventStore>((set, get) => ({
   },
 
   deleteEvent: async (id) => {
-    const now = new Date().toISOString()
-    const updates = { deleted_at: now, updated_at: now }
-    await db.events.update(id, updates)
+    await db.participants.where('event_id').equals(id).delete()
+    await db.spinRoundEntries.where('event_id').equals(id).delete()
+    await db.eventSessions.where('event_id').equals(id).delete()
+    await db.events.delete(id)
     await enqueueSync('event', id, 'delete', { id })
     set((state) => ({ events: state.events.filter((e) => e.id !== id) }))
   },

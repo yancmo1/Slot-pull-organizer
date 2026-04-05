@@ -14,7 +14,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'apple-splash-*.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'apple-splash-*.png'],
       manifest: {
         name: 'Cruise Slot Pull Organizer',
         short_name: 'SlotPull',
