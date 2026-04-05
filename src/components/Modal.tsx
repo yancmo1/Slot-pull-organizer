@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { X } from 'lucide-react'
 
 interface ModalProps {
   open: boolean
@@ -27,7 +28,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-700/50 transition-all ripple"
             aria-label="Close"
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
         <div className="p-4">{children}</div>

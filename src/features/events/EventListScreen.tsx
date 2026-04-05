@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Settings, Search, RefreshCw, ArrowDown } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
 import { EventForm } from './EventForm'
@@ -49,8 +50,11 @@ export function EventListScreen() {
           className="fixed top-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-200"
           style={{ transform: `translate(-50%, ${Math.min(pullDistance, 60)}px)` }}
         >
-          <div className={`glass px-4 py-2 rounded-full shadow-lg ${isRefreshing ? 'pull-refresh-indicator' : ''}`}>
-            {isRefreshing ? '🔄 Refreshing...' : '⬇️ Pull to refresh'}
+          <div className="glass px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+            {isRefreshing
+              ? <><RefreshCw size={14} className="animate-spin" /><span className="text-sm">Refreshing...</span></>
+              : <><ArrowDown size={14} /><span className="text-sm">Pull to refresh</span></>
+            }
           </div>
         </div>
       )}
@@ -58,11 +62,11 @@ export function EventListScreen() {
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-white gradient-blue bg-clip-text" style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>🎰 Slot Pull</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">🎰 Slot Pull</h1>
             <p className="text-slate-400 text-sm">Organizer</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}>⚙️</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><Settings size={18} /></Button>
             <Button
               size="md"
               onClick={() => {
@@ -98,13 +102,14 @@ export function EventListScreen() {
         </div>
 
         {/* Search */}
-        <div className="mb-4">
+        <div className="relative mb-4">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="🔍 Search events..."
+            placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { ChevronLeft, Sun, FileDown, Search } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
 import { ParticipantForm } from '../participants/ParticipantForm'
@@ -93,13 +94,13 @@ export function EventDetailScreen() {
       <div className="max-w-lg mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-start gap-3 mb-4">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-white p-2 -ml-2 mt-0.5">←</button>
+          <button onClick={() => navigate('/')} aria-label="Go back" className="text-slate-400 hover:text-white p-2 -ml-2 mt-0.5 rounded-lg hover:bg-slate-700/50 transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"><ChevronLeft size={20} /></button>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-white leading-tight">{event.title}</h1>
             {event.trip_label && <p className="text-blue-400 text-sm">{event.trip_label}</p>}
             <p className="text-slate-400 text-sm">{event.date}{event.location ? ` · ${event.location}` : ''}</p>
           </div>
-          <Button size="sm" variant="secondary" onClick={() => navigate(`/event/${id}/dayof`)}>☀️ Day-of</Button>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/event/${id}/dayof`)} className="gap-1.5"><Sun size={14} />Day-of</Button>
         </div>
 
         {/* Totals */}
@@ -145,7 +146,7 @@ export function EventDetailScreen() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
-              className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${filter === f.key ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+              className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${filter === f.key ? 'bg-blue-600 text-white' : 'bg-slate-700/80 text-slate-300'}`}
             >
               {f.label}
             </button>
@@ -153,13 +154,14 @@ export function EventDetailScreen() {
         </div>
 
         {/* Search */}
-        <div className="mb-4">
+        <div className="relative mb-4">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="🔍 Search participants..."
+            placeholder="Search participants..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 
@@ -176,7 +178,7 @@ export function EventDetailScreen() {
               <button
                 key={sort.key}
                 onClick={() => setSortBy(sort.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${sortBy === sort.key ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${sortBy === sort.key ? 'bg-blue-600 text-white' : 'bg-slate-700/80 text-slate-300'}`}
               >
                 {sort.label}
               </button>
@@ -187,7 +189,7 @@ export function EventDetailScreen() {
         {/* Actions */}
         <div className="flex gap-2 mb-4">
           <Button size="sm" className="flex-1" onClick={() => setAdding(true)}>+ Add Participant</Button>
-          <Button size="sm" variant="secondary" onClick={() => exportEventToCSV(event, participants)}>📊 CSV</Button>
+          <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => exportEventToCSV(event, participants)}><FileDown size={14} />CSV</Button>
         </div>
 
         {/* Participant list */}

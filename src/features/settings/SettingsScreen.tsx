@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ChevronLeft, Settings, Upload, Download, Lock, AlertTriangle, Trash2 } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useEventStore } from '../../store/eventStore'
@@ -58,8 +59,8 @@ export function SettingsScreen() {
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="max-w-lg mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-white p-2 -ml-2">←</button>
-          <h1 className="text-2xl font-bold">⚙️ Settings</h1>
+          <button onClick={() => navigate('/')} aria-label="Go back" className="text-slate-400 hover:text-white p-2 -ml-2 rounded-lg hover:bg-slate-700/50 transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"><ChevronLeft size={20} /></button>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Settings size={20} />Settings</h1>
         </div>
 
         {message && (
@@ -73,26 +74,26 @@ export function SettingsScreen() {
             <h2 className="text-white font-semibold mb-1">Backup & Restore</h2>
             <p className="text-slate-400 text-sm mb-4">Export all your data as a JSON backup file, or import a previous backup.</p>
             <div className="flex flex-col gap-3">
-              <Button variant="secondary" className="w-full" onClick={handleExportJSON}>
-                📤 Export JSON Backup
+              <Button variant="secondary" className="w-full gap-2" onClick={handleExportJSON}>
+                <Upload size={15} />Export JSON Backup
               </Button>
-              <Button variant="secondary" className="w-full" onClick={() => fileRef.current?.click()} disabled={importing}>
-                {importing ? 'Importing…' : '📥 Import JSON Backup'}
+              <Button variant="secondary" className="w-full gap-2" onClick={() => fileRef.current?.click()} disabled={importing}>
+                {importing ? 'Importing…' : <><Download size={15} />Import JSON Backup</>}
               </Button>
-              <input ref={fileRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
+              <input ref={fileRef} type="file" accept=".json" onChange={handleImport} className="hidden" aria-label="Import JSON backup file" />
             </div>
           </div>
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
-            <h2 className="text-white font-semibold mb-1">🔒 Privacy Notice</h2>
+            <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><Lock size={15} />Privacy Notice</h2>
             <p className="text-slate-400 text-sm">All data is stored locally on this device. JSON backups are not encrypted and contain participant names and payment details. Do not share backup files with untrusted parties.</p>
           </div>
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-red-900/40">
-            <h2 className="text-white font-semibold mb-1">⚠️ Danger Zone</h2>
+            <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><AlertTriangle size={15} />Danger Zone</h2>
             <p className="text-slate-400 text-sm mb-4">Permanently erase all events, participants, and session data from this device. This cannot be undone.</p>
-            <Button variant="secondary" className="w-full text-red-400 border-red-800" onClick={() => setClearConfirmOpen(true)}>
-              🗑️ Clear All Local Data
+            <Button variant="secondary" className="w-full gap-2 text-red-400 border-red-800" onClick={() => setClearConfirmOpen(true)}>
+              <Trash2 size={15} />Clear All Local Data
             </Button>
           </div>
 

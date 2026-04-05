@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MoreVertical, Pencil, Trash2, Check, Circle } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -30,10 +31,10 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
         <div className="flex items-center gap-3">
           <button
             onClick={() => toggleCheckedIn(participant.id)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors flex-shrink-0 ${participant.checked_in ? 'bg-green-700 text-green-100' : 'bg-slate-700 text-slate-400'}`}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${participant.checked_in ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
             aria-label={participant.checked_in ? 'Checked in' : 'Not checked in'}
           >
-            {participant.checked_in ? '✓' : '○'}
+            {participant.checked_in ? <Check size={16} strokeWidth={2.5} /> : <Circle size={16} />}
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -61,14 +62,15 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
+              aria-label="Options"
               className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-700 min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
-              ⋯
+              <MoreVertical size={18} />
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 bg-slate-700 rounded-xl shadow-xl border border-slate-600 z-10 min-w-[150px]">
-                <button onClick={() => { setEditing(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600 rounded-t-xl">✏️ Edit</button>
-                <button onClick={() => { setShowDeleteConfirm(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-red-400 hover:bg-slate-600 rounded-b-xl">🗑️ Remove</button>
+                <button onClick={() => { setEditing(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600 rounded-t-xl flex items-center gap-2.5"><Pencil size={14} />Edit</button>
+                <button onClick={() => { setShowDeleteConfirm(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-red-400 hover:bg-slate-600 rounded-b-xl flex items-center gap-2.5"><Trash2 size={14} />Remove</button>
               </div>
             )}
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { ChevronLeft, Play, CheckCheck, RefreshCw, Calculator, DollarSign, Banknote, CheckCircle2 } from 'lucide-react'
 import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
 import { useSpinRoundStore } from '../../store/spinRoundStore'
@@ -159,7 +160,7 @@ export function DayOfScreen() {
       <div className="max-w-lg mx-auto">
         {/* Header — not sticky */}
         <div className="px-4 pt-4 pb-2 flex items-center gap-3">
-          <button onClick={() => navigate(`/event/${id}`)} className="text-slate-400 hover:text-white p-2 -ml-2">←</button>
+          <button onClick={() => navigate(`/event/${id}`)} aria-label="Go back" className="text-slate-400 hover:text-white p-2 -ml-2 rounded-lg hover:bg-slate-700/50 transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"><ChevronLeft size={20} /></button>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-white">☀️ Day-of Mode</h1>
             <p className="text-slate-400 text-sm truncate">{event.title}</p>
@@ -185,7 +186,7 @@ export function DayOfScreen() {
               }}
               className="flex-1"
             >
-              {playMode ? '🎮 Play Mode ON' : '🎮 Play Mode'}
+              {playMode ? <><Play size={14} className="mr-1.5" />Play Mode ON</> : <><Play size={14} className="mr-1.5" />Play Mode</>}
             </Button>
             <Button
               variant="secondary"
@@ -194,7 +195,7 @@ export function DayOfScreen() {
               disabled={notCheckedInCount === 0}
               className="flex-1"
             >
-              ✓ Check All In ({notCheckedInCount})
+              <><CheckCheck size={14} className="mr-1.5" />Check All In ({notCheckedInCount})</>
             </Button>
           </div>
 
@@ -203,8 +204,8 @@ export function DayOfScreen() {
             <div className="bg-slate-800 rounded-xl px-3 py-2 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-white font-semibold text-sm">
-                    🔄 Round <span className="text-blue-400 font-bold">{currentRound}</span>
+                  <span className="text-white font-semibold text-sm flex items-center gap-1.5">
+                    <RefreshCw size={13} />Round <span className="text-blue-400 font-bold">{currentRound}</span>
                   </span>
                   <span className="text-slate-400 text-xs ml-2">
                     {currentRoundSpunCount} of {checkedInRoster.length} spun
@@ -345,12 +346,12 @@ export function DayOfScreen() {
             onClick={() => setShowCalculator(!showCalculator)}
             className="w-full"
           >
-            {showCalculator ? '📊 Hide Calculator' : '📊 Show Winnings Calculator'}
+            <><Calculator size={14} className="mr-1.5" />{showCalculator ? 'Hide Calculator' : 'Show Winnings Calculator'}</>
           </Button>
 
           {showCalculator && (
             <div className="mt-3 bg-slate-800 rounded-2xl p-4 border border-slate-700">
-              <h2 className="text-white text-lg font-bold mb-1">💰 Winnings Calculator</h2>
+              <h2 className="text-white text-lg font-bold mb-1 flex items-center gap-2"><DollarSign size={18} />Winnings Calculator</h2>
               <p className="text-slate-500 text-xs mb-4">Based on {totals.checkedInCount} checked-in players · not affected by round</p>
 
               <div className="mb-4">
@@ -383,10 +384,10 @@ export function DayOfScreen() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="mt-3 w-full"
+                      className="mt-3 w-full gap-1.5"
                       onClick={() => setShowBillBreakdown(true)}
                     >
-                      💵 Bill Breakdown
+                      <Banknote size={14} />Bill Breakdown
                     </Button>
                   </div>
                 </div>
@@ -492,8 +493,8 @@ function DayOfParticipantCard({
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           {hasSpun && (
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-900 text-purple-200">
-              ✓ Spun
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+              <CheckCircle2 size={11} />Spun
             </span>
           )}
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${paymentBadgeClass}`}>
@@ -506,10 +507,10 @@ function DayOfParticipantCard({
           <Button
             size="md"
             variant={hasSpun ? 'primary' : 'secondary'}
-            className="flex-1"
+            className="flex-1 gap-1.5"
             onClick={onToggleSpin}
           >
-            {hasSpun ? '✓ Has Spun' : 'Mark as Spun'}
+            {hasSpun ? <><CheckCircle2 size={14} />Has Spun</> : 'Mark as Spun'}
           </Button>
         ) : (
           <>
@@ -553,7 +554,7 @@ function BillBreakdownModal({
   const totalBreakdown = calculateBillBreakdown(perPerson * checkedInCount)
 
   return (
-    <Modal open={open} onClose={onClose} title="💵 Bill Breakdown">
+    <Modal open={open} onClose={onClose} title="Bill Breakdown">
       <div className="space-y-4">
         <p className="text-slate-400 text-sm">
           How many bills you need to pay each person and in total.
