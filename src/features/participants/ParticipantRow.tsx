@@ -41,9 +41,6 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
               <span className="text-white font-medium truncate">{participant.display_name}</span>
               {participant.waitlist && <span className="text-xs text-slate-400 bg-slate-700 px-1.5 py-0.5 rounded-full">waitlist</span>}
             </div>
-            {participant.alias_or_real_name && (
-              <p className="text-slate-400 text-xs truncate">{participant.alias_or_real_name}</p>
-            )}
             <div className="flex items-center gap-2 mt-1">
               <Badge status={participant.payment_status} />
               <span className="text-slate-400 text-xs">${participant.amount_paid}/${participant.buy_in_amount}</span>
