@@ -11,14 +11,6 @@ const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
 // timestamp). The new filter uses PocketBase's server-set `updated` field.
 const SYNC_CURSOR_KEY = (collection: string) => `sync_last_v2_${collection}`
 
-/**
- * Convert any ISO-8601 date string to PocketBase's date format.
- * PocketBase (SQLite) stores `updated` as "YYYY-MM-DD HH:MM:SS.mmmZ" (space, not T).
- * Using T-format in a filter causes string comparison failures because
- * space (0x20) < T (0x54), so PB records are always "less than" an ISO cursor.
- */
-const toPBDate = (iso: string) => iso.replace('T', ' ')
-
 export async function enqueueSync(
   entity_type: SyncQueueItem['entity_type'],
   entity_id: string,
@@ -64,7 +56,7 @@ async function getPBRecordIdByLocalId(
 ): Promise<string | null> {
   try {
     const results = await pb.collection(collection).getList(1, 1, {
-      filter: `local_id = "${localId}"`,
+      filter: `local_id = '${localId}'`,
       requestKey: null,
     })
     return results.items[0]?.id ?? null
@@ -148,7 +140,7 @@ export async function pullChanges(): Promise<void> {
       // pushed to PB after our last sync are always returned, regardless of the
       // original creation timestamp on the source device.
       const records = await pb.collection(collection).getFullList({
-        filter: `updated > "${lastSyncedAt}"`,
+        filter: `updated > '${lastSyncedAt}'`,
         requestKey: null,
       })
 
