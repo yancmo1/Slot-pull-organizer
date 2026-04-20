@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, Settings, Upload, Download, Lock, AlertTriangle, Trash2 } from 'lucide-react'
+import { ChevronLeft, Settings, Upload, Download, Lock, AlertTriangle, Trash2, RefreshCw, LogIn, LogOut } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { Input } from '../../components/Input'
 import { useEventStore } from '../../store/eventStore'
 import { exportAllToJSON, importFromJSON } from '../../lib/utils/export'
 import { db } from '../../lib/db'
+import { isPocketBaseConfigured } from '../../lib/sync/pocketbase'
+import { signIn, signOut, isSignedIn, getAuthEmail } from '../../lib/sync/auth'
+import { flushSyncQueue, pullChanges } from '../../lib/sync'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -14,6 +18,51 @@ export function SettingsScreen() {
   const [importing, setImporting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+
+  // Sync / auth state
+  const pbConfigured = isPocketBaseConfigured()
+  const [syncEmail, setSyncEmail] = useState('')
+  const [syncPassword, setSyncPassword] = useState('')
+  const [syncAuthState, setSyncAuthState] = useState<boolean>(isSignedIn())
+  const [syncEmail_display, setSyncEmailDisplay] = useState<string | null>(getAuthEmail())
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+
+  const handleSignIn = async () => {
+    setSyncError(null)
+    try {
+      await signIn(syncEmail, syncPassword)
+      setSyncAuthState(true)
+      setSyncEmailDisplay(getAuthEmail())
+      setSyncEmail('')
+      setSyncPassword('')
+    } catch {
+      setSyncError('Sign in failed. Check your email and password.')
+    }
+  }
+
+  const handleSignOut = () => {
+    signOut()
+    setSyncAuthState(false)
+    setSyncEmailDisplay(null)
+    setSyncStatus(null)
+  }
+
+  const handleSyncNow = async () => {
+    setSyncing(true)
+    setSyncStatus(null)
+    try {
+      await pullChanges()
+      await flushSyncQueue()
+      await loadEvents()
+      setSyncStatus('Synced successfully')
+    } catch {
+      setSyncStatus('Sync failed — check your connection')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const handleExportJSON = async () => {
     await exportAllToJSON()
@@ -88,6 +137,53 @@ export function SettingsScreen() {
             <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><Lock size={15} />Privacy Notice</h2>
             <p className="text-slate-400 text-sm">All data is stored locally on this device. JSON backups are not encrypted and contain participant names and payment details. Do not share backup files with untrusted parties.</p>
           </div>
+
+          {pbConfigured && (
+            <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
+              <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><RefreshCw size={15} />Sync Account</h2>
+              {syncAuthState ? (
+                <>
+                  <p className="text-slate-400 text-sm mb-3">Signed in as <span className="text-white">{syncEmail_display}</span></p>
+                  <div className="flex flex-col gap-2">
+                    <Button variant="secondary" className="w-full gap-2" onClick={handleSyncNow} disabled={syncing}>
+                      <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
+                      {syncing ? 'Syncing…' : 'Sync Now'}
+                    </Button>
+                    <Button variant="secondary" className="w-full gap-2" onClick={handleSignOut}>
+                      <LogOut size={15} />Sign Out
+                    </Button>
+                  </div>
+                  {syncStatus && (
+                    <p className={`text-sm mt-2 ${syncStatus.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>{syncStatus}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400 text-sm mb-3">Sign in to sync your data across devices.</p>
+                  <div className="flex flex-col gap-2">
+                    <Input
+                      label="Email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={syncEmail}
+                      onChange={e => setSyncEmail(e.target.value)}
+                    />
+                    <Input
+                      label="Password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={syncPassword}
+                      onChange={e => setSyncPassword(e.target.value)}
+                    />
+                    {syncError && <p className="text-red-400 text-sm">{syncError}</p>}
+                    <Button variant="primary" className="w-full gap-2" onClick={handleSignIn}>
+                      <LogIn size={15} />Sign In
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-red-900/40">
             <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><AlertTriangle size={15} />Danger Zone</h2>
