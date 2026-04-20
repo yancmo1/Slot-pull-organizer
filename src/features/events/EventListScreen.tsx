@@ -8,6 +8,7 @@ import { EventCard } from './EventCard'
 import { useEventStore } from '../../store/eventStore'
 import { usePullToRefresh } from '../../lib/hooks/usePullToRefresh'
 import { haptic } from '../../lib/utils/haptic'
+import { flushSyncQueue, pullChanges } from '../../lib/sync'
 
 export function EventListScreen() {
   const navigate = useNavigate()
@@ -15,6 +16,20 @@ export function EventListScreen() {
   const [creating, setCreating] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    haptic.medium()
+    setSyncing(true)
+    try {
+      await flushSyncQueue()
+      await pullChanges()
+      await loadEvents()
+      haptic.success()
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => { loadEvents() }, [loadEvents])
 
@@ -69,13 +84,11 @@ export function EventListScreen() {
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Refresh events"
-              onClick={async () => {
-                haptic.light()
-                await loadEvents()
-              }}
+              aria-label="Sync"
+              disabled={syncing}
+              onClick={handleSync}
             >
-              <RefreshCw size={18} />
+              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><Settings size={18} /></Button>
             <Button
@@ -115,13 +128,11 @@ export function EventListScreen() {
           <Button
             variant="ghost"
             size="sm"
-            aria-label="Refresh events"
-            onClick={async () => {
-              haptic.light()
-              await loadEvents()
-            }}
+            aria-label="Sync"
+            disabled={syncing}
+            onClick={handleSync}
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
           </Button>
         </div>
 

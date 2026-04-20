@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Sun, FileDown, Search } from 'lucide-react'
+import { ChevronLeft, Sun, FileDown, Search, RefreshCw } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
 import { ParticipantForm } from '../participants/ParticipantForm'
@@ -9,6 +9,8 @@ import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
 import { calculateTotals } from '../../lib/utils/totals'
 import { exportEventToCSV } from '../../lib/utils/export'
+import { flushSyncQueue, pullChanges } from '../../lib/sync'
+import { haptic } from '../../lib/utils/haptic'
 
 type Filter = 'all' | 'unpaid' | 'checked-in' | 'waitlist'
 type SortBy = 'name' | 'payment' | 'checkin' | 'custom'
@@ -22,6 +24,21 @@ export function EventDetailScreen() {
   const [filter, setFilter] = useState<Filter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('custom')
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    haptic.medium()
+    setSyncing(true)
+    try {
+      await flushSyncQueue()
+      await pullChanges()
+      await loadEvents()
+      if (id) await loadParticipants(id)
+      haptic.success()
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     loadEvents()
@@ -100,7 +117,12 @@ export function EventDetailScreen() {
             {event.trip_label && <p className="text-blue-400 text-sm">{event.trip_label}</p>}
             <p className="text-slate-400 text-sm">{event.date}{event.location ? ` · ${event.location}` : ''}</p>
           </div>
-          <Button size="sm" variant="secondary" onClick={() => navigate(`/event/${id}/dayof`)} className="gap-1.5"><Sun size={14} />Day-of</Button>
+          <div className="flex gap-2 items-center">
+            <Button size="sm" variant="ghost" aria-label="Sync" disabled={syncing} onClick={handleSync}>
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate(`/event/${id}/dayof`)} className="gap-1.5"><Sun size={14} />Day-of</Button>
+          </div>
         </div>
 
         {/* Totals */}
