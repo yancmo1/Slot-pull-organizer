@@ -46,6 +46,23 @@ export async function purgeSyncQueue(maxAgeDays = 30): Promise<number> {
   return old.length
 }
 
+/** Look up a PocketBase record's own ID by the app's local UUID stored in local_id. */
+async function getPBRecordIdByLocalId(
+  pb: ReturnType<typeof getPocketBase>,
+  collection: string,
+  localId: string,
+): Promise<string | null> {
+  try {
+    const results = await pb.collection(collection).getList(1, 1, {
+      filter: `local_id = "${localId}"`,
+      requestKey: null,
+    })
+    return results.items[0]?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function flushSyncQueue(): Promise<void> {
   if (!isPocketBaseConfigured()) return
   const pb = getPocketBase()
@@ -56,21 +73,40 @@ export async function flushSyncQueue(): Promise<void> {
     const collection = COLLECTION_MAP[item.entity_type]
     if (!collection) continue
     try {
+      // Strip the local UUID `id` from the payload — PocketBase uses its own 15-char IDs.
+      // We store our UUID in the `local_id` field for bidirectional mapping.
+      const { id: _localId, ...payloadWithoutId } = item.payload as Record<string, unknown>
+
       if (item.action === 'create') {
+        const createPayload = { ...payloadWithoutId, local_id: item.entity_id }
         try {
-          await pb.collection(collection).create(item.payload, { requestKey: null })
+          await pb.collection(collection).create(createPayload, { requestKey: null })
         } catch (createErr: unknown) {
-          // If already exists (400), fall through to update
-          if ((createErr as { status?: number })?.status === 400) {
-            await pb.collection(collection).update(item.entity_id, item.payload, { requestKey: null })
+          // If already exists (409/400 duplicate local_id), fall through to update
+          const status = (createErr as { status?: number })?.status
+          if (status === 400 || status === 409) {
+            const pbId = await getPBRecordIdByLocalId(pb, collection, item.entity_id)
+            if (pbId) {
+              await pb.collection(collection).update(pbId, payloadWithoutId, { requestKey: null })
+            } else {
+              throw createErr
+            }
           } else {
             throw createErr
           }
         }
       } else if (item.action === 'update') {
-        await pb.collection(collection).update(item.entity_id, item.payload, { requestKey: null })
+        const pbId = await getPBRecordIdByLocalId(pb, collection, item.entity_id)
+        if (!pbId) throw new Error(`PB record not found for local_id=${item.entity_id}`)
+        await pb.collection(collection).update(pbId, payloadWithoutId, { requestKey: null })
       } else if (item.action === 'delete') {
-        await pb.collection(collection).delete(item.entity_id, { requestKey: null })
+        const pbId = await getPBRecordIdByLocalId(pb, collection, item.entity_id)
+        if (!pbId) {
+          // Already deleted or never synced — mark as done
+          await db.syncQueue.update(item.id, { synced_at: new Date().toISOString() })
+          continue
+        }
+        await pb.collection(collection).delete(pbId, { requestKey: null })
       }
       await db.syncQueue.update(item.id, { synced_at: new Date().toISOString() })
     } catch {
@@ -95,10 +131,19 @@ export async function pullChanges(): Promise<void> {
       })
 
       if (records.length > 0) {
+        // Remap PB records to local format:
+        // - Use local_id as the record's id (our app's UUID), falling back to PB's id
+        // - Strip PB-specific metadata fields that don't belong in the local schema
+        const localRecords = records.map((rec) => {
+          const r = rec as Record<string, unknown>
+          const { collectionId: _, collectionName: __, created: ___, updated: ____, local_id: localId, id: pbId, ...rest } = r
+          return { ...rest, id: (localId as string | undefined) ?? pbId }
+        })
+
         if (entityType === 'event') {
-          await db.events.bulkPut(records as never)
+          await db.events.bulkPut(localRecords as never)
         } else if (entityType === 'participant') {
-          await db.participants.bulkPut(records as never)
+          await db.participants.bulkPut(localRecords as never)
         }
       }
 
