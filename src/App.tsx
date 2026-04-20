@@ -7,13 +7,16 @@ import { SettingsScreen } from './features/settings/SettingsScreen'
 import { isPocketBaseConfigured } from './lib/sync/pocketbase'
 import { isSignedIn } from './lib/sync/auth'
 import { pullChanges, flushSyncQueue } from './lib/sync'
+import { useEventStore } from './store/eventStore'
 
 function App() {
   useEffect(() => {
     const sync = async () => {
       if (!isPocketBaseConfigured() || !isSignedIn()) return
-      await pullChanges()
       await flushSyncQueue()
+      await pullChanges()
+      // Refresh in-memory store so the UI reflects what was just pulled
+      await useEventStore.getState().loadEvents()
     }
 
     if (navigator.onLine) sync()
