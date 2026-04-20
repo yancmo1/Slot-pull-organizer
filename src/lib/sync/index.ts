@@ -7,10 +7,6 @@ const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
   participant: 'participants',
 }
 
-// v2: renamed to bust stale cursors from the old `updated_at` filter (client
-// timestamp). The new filter uses PocketBase's server-set `updated` field.
-const SYNC_CURSOR_KEY = (collection: string) => `sync_last_v2_${collection}`
-
 export async function enqueueSync(
   entity_type: SyncQueueItem['entity_type'],
   entity_id: string,
@@ -125,22 +121,10 @@ export async function pullChanges(): Promise<void> {
 
   try {
     for (const [entityType, collection] of Object.entries(COLLECTION_MAP)) {
-      const cursorKey = SYNC_CURSOR_KEY(collection)
-      // Convert any stored ISO T-format cursor to PocketBase's space-format.
-      // Old cursors written in T-format are normalised here automatically.
-      const lastSyncedAt = toPBDate(localStorage.getItem(cursorKey) ?? '2000-01-01 00:00:00.000Z')
-
-      // Capture query time BEFORE the request so records that arrive during
-      // processing are caught on the next pull. Store in PocketBase's date
-      // format (space separator) so subsequent filter comparisons work correctly.
-      const queryTime = toPBDate(new Date().toISOString())
-
-      // Filter on PocketBase's auto-managed `updated` field (set by PB on every
-      // write), NOT our client-set `updated_at` field. This ensures records
-      // pushed to PB after our last sync are always returned, regardless of the
-      // original creation timestamp on the source device.
+      // Pull all records unconditionally. The `updated` system field is not
+      // exposed by the collection's API rules, making date-filtered queries
+      // return 400. For this app's data size a full pull is fast and correct.
       const records = await pb.collection(collection).getFullList({
-        filter: `updated > '${lastSyncedAt}'`,
         requestKey: null,
       })
 
@@ -154,8 +138,6 @@ export async function pullChanges(): Promise<void> {
             local_id: localId,
             collectionId: _cId,
             collectionName: _cName,
-            created: _created,
-            updated: _updated,
             ...rest
           } = rec as Record<string, unknown>
           return { ...rest, id: (localId as string | undefined) ?? pbId }
@@ -167,8 +149,6 @@ export async function pullChanges(): Promise<void> {
           await db.participants.bulkPut(localRecords as never)
         }
       }
-
-      localStorage.setItem(cursorKey, queryTime)
     }
   } catch (err) {
     console.error('[pullChanges] sync error:', err)
