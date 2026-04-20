@@ -15,26 +15,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy compose file to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.ORACLE_VM_HOST }}
-          username: ${{ secrets.ORACLE_VM_USER }}
-          key: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          source: "infra/pocketbase/docker-compose.yml"
-          target: "/opt/infra-new/apps/pocketbase/"
-          strip_components: 2
-
-      - name: Start / update PocketBase
+      - name: Deploy PocketBase to Oracle VM
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ORACLE_VM_HOST }}
           username: ${{ secrets.ORACLE_VM_USER }}
           key: ${{ secrets.ORACLE_VM_SSH_KEY }}
           script: |
+            mkdir -p /opt/infra-new/apps/pocketbase
+            cat > /opt/infra-new/apps/pocketbase/docker-compose.yml << 'COMPOSEFILE'
+            services:
+              pocketbase:
+                image: ghcr.io/muchobien/pocketbase:latest
+                container_name: slotpull-pocketbase
+                restart: unless-stopped
+                ports:
+                  - "127.0.0.1:8090:8090"
+                volumes:
+                  - pb_data:/pb/pb_data
+                healthcheck:
+                  test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8090/api/health"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+
+            volumes:
+              pb_data:
+                driver: local
+            COMPOSEFILE
             cd /opt/infra-new/apps/pocketbase
             docker compose pull
             docker compose up -d
             echo "--- Health check ---"
-            sleep 3
+            sleep 5
             curl -sf http://localhost:8090/api/health && echo " PocketBase healthy" || echo " Health check failed"
