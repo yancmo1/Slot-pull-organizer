@@ -7,7 +7,9 @@ const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
   participant: 'participants',
 }
 
-const SYNC_CURSOR_KEY = (collection: string) => `sync_last_${collection}`
+// v2: renamed to bust stale cursors from the old `updated_at` filter (client
+// timestamp). The new filter uses PocketBase's server-set `updated` field.
+const SYNC_CURSOR_KEY = (collection: string) => `sync_last_v2_${collection}`
 
 export async function enqueueSync(
   entity_type: SyncQueueItem['entity_type'],
@@ -126,8 +128,16 @@ export async function pullChanges(): Promise<void> {
       const cursorKey = SYNC_CURSOR_KEY(collection)
       const lastSyncedAt = localStorage.getItem(cursorKey) ?? '2000-01-01T00:00:00Z'
 
+      // Capture query time BEFORE the request so records that arrive during
+      // processing are caught on the next pull.
+      const queryTime = new Date().toISOString()
+
+      // Filter on PocketBase's auto-managed `updated` field (set by PB on every
+      // write), NOT our client-set `updated_at` field. This ensures records
+      // pushed to PB after our last sync are always returned, regardless of the
+      // original creation timestamp on the source device.
       const records = await pb.collection(collection).getFullList({
-        filter: `updated_at > "${lastSyncedAt}"`,
+        filter: `updated > "${lastSyncedAt}"`,
         requestKey: null,
       })
 
@@ -136,8 +146,15 @@ export async function pullChanges(): Promise<void> {
         // - Use local_id as the record's id (our app's UUID), falling back to PB's id
         // - Strip PB-specific metadata fields that don't belong in the local schema
         const localRecords = records.map((rec) => {
-          const r = rec as Record<string, unknown>
-          const { local_id: localId, id: pbId, ...rest } = r
+          const {
+            id: pbId,
+            local_id: localId,
+            collectionId: _cId,
+            collectionName: _cName,
+            created: _created,
+            updated: _updated,
+            ...rest
+          } = rec as Record<string, unknown>
           return { ...rest, id: (localId as string | undefined) ?? pbId }
         })
 
@@ -148,7 +165,7 @@ export async function pullChanges(): Promise<void> {
         }
       }
 
-      localStorage.setItem(cursorKey, new Date().toISOString())
+      localStorage.setItem(cursorKey, queryTime)
     }
   } catch (err) {
     console.error('[pullChanges] sync error:', err)
