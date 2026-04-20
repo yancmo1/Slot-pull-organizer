@@ -76,6 +76,7 @@ export async function flushSyncQueue(): Promise<void> {
       // Strip the local UUID `id` from the payload — PocketBase uses its own 15-char IDs.
       // We store our UUID in the `local_id` field for bidirectional mapping.
       const { id: _localId, ...payloadWithoutId } = item.payload as Record<string, unknown>
+      void _localId
 
       if (item.action === 'create') {
         const createPayload = { ...payloadWithoutId, local_id: item.entity_id }
@@ -136,7 +137,7 @@ export async function pullChanges(): Promise<void> {
         // - Strip PB-specific metadata fields that don't belong in the local schema
         const localRecords = records.map((rec) => {
           const r = rec as Record<string, unknown>
-          const { collectionId: _, collectionName: __, created: ___, updated: ____, local_id: localId, id: pbId, ...rest } = r
+          const { local_id: localId, id: pbId, ...rest } = r
           return { ...rest, id: (localId as string | undefined) ?? pbId }
         })
 

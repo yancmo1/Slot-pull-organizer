@@ -66,6 +66,17 @@ export function EventListScreen() {
             <p className="text-slate-400 text-sm">Organizer</p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Refresh events"
+              onClick={async () => {
+                haptic.light()
+                await loadEvents()
+              }}
+            >
+              <RefreshCw size={18} />
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><Settings size={18} /></Button>
             <Button
               size="md"
@@ -80,25 +91,38 @@ export function EventListScreen() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4 overflow-x-auto hide-scrollbar pb-1">
-          <button
-            onClick={() => {
+        <div className="flex items-center justify-between gap-2 mb-4 overflow-x-auto hide-scrollbar pb-1">
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                haptic.light()
+                setShowArchived(false)
+              }}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${!showArchived ? 'gradient-blue text-white shadow-lg' : 'glass-light text-slate-300'}`}
+            >
+              Upcoming ({active.length})
+            </button>
+            <button
+              onClick={() => {
+                haptic.light()
+                setShowArchived(true)
+              }}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${showArchived ? 'gradient-blue text-white shadow-lg' : 'glass-light text-slate-300'}`}
+            >
+              Archived ({archived.length})
+            </button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Refresh events"
+            onClick={async () => {
               haptic.light()
-              setShowArchived(false)
+              await loadEvents()
             }}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${!showArchived ? 'gradient-blue text-white shadow-lg' : 'glass-light text-slate-300'}`}
           >
-            Upcoming ({active.length})
-          </button>
-          <button
-            onClick={() => {
-              haptic.light()
-              setShowArchived(true)
-            }}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${showArchived ? 'gradient-blue text-white shadow-lg' : 'glass-light text-slate-300'}`}
-          >
-            Archived ({archived.length})
-          </button>
+            <RefreshCw size={16} />
+          </Button>
         </div>
 
         {/* Search */}
