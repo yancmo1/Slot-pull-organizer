@@ -11,6 +11,14 @@ const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
 // timestamp). The new filter uses PocketBase's server-set `updated` field.
 const SYNC_CURSOR_KEY = (collection: string) => `sync_last_v2_${collection}`
 
+/**
+ * Convert any ISO-8601 date string to PocketBase's date format.
+ * PocketBase (SQLite) stores `updated` as "YYYY-MM-DD HH:MM:SS.mmmZ" (space, not T).
+ * Using T-format in a filter causes string comparison failures because
+ * space (0x20) < T (0x54), so PB records are always "less than" an ISO cursor.
+ */
+const toPBDate = (iso: string) => iso.replace('T', ' ')
+
 export async function enqueueSync(
   entity_type: SyncQueueItem['entity_type'],
   entity_id: string,
@@ -126,11 +134,14 @@ export async function pullChanges(): Promise<void> {
   try {
     for (const [entityType, collection] of Object.entries(COLLECTION_MAP)) {
       const cursorKey = SYNC_CURSOR_KEY(collection)
-      const lastSyncedAt = localStorage.getItem(cursorKey) ?? '2000-01-01T00:00:00Z'
+      // Convert any stored ISO T-format cursor to PocketBase's space-format.
+      // Old cursors written in T-format are normalised here automatically.
+      const lastSyncedAt = toPBDate(localStorage.getItem(cursorKey) ?? '2000-01-01 00:00:00.000Z')
 
       // Capture query time BEFORE the request so records that arrive during
-      // processing are caught on the next pull.
-      const queryTime = new Date().toISOString()
+      // processing are caught on the next pull. Store in PocketBase's date
+      // format (space separator) so subsequent filter comparisons work correctly.
+      const queryTime = toPBDate(new Date().toISOString())
 
       // Filter on PocketBase's auto-managed `updated` field (set by PB on every
       // write), NOT our client-set `updated_at` field. This ensures records

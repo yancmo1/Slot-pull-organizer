@@ -53,8 +53,8 @@ export function SettingsScreen() {
     setSyncing(true)
     setSyncStatus(null)
     try {
-      await pullChanges()
       await flushSyncQueue()
+      await pullChanges()
       await loadEvents()
       setSyncStatus('Synced successfully')
     } catch {
