@@ -22,6 +22,21 @@ Append short entries here when changes affect:
 - workflow / automation
 - anything that could surprise future contributors
 
+### 2026-04-21 — Pending sync note + Facebook-ready attendee list
+
+**What changed:**
+
+- `src/components/SyncStatusCard.tsx` now adds a dedicated "Unsynced changes" note whenever local queue items are still pending, so Event List, Event Detail, Settings, and the dev sandbox all surface that state consistently.
+- `src/lib/utils/export.ts` now includes `buildEventAttendeeList()` for a copy/paste-friendly event roster format that separates active attendees from waitlist names.
+- `src/features/events/EventDetailScreen.tsx` now adds an `Attendee List` action that opens a modal preview and supports one-tap copy for Facebook posts/messages alongside the existing CSV export.
+- `src/tests/exportFormatting.test.ts` covers the attendee-list formatting behavior.
+
+**Why:** Users need clearer trust signals when local changes still have not synced, and a quick social-ready roster export is faster than hand-formatting names for Facebook posts.
+
+**Risks/mitigations:** The attendee export is additive and leaves the CSV flow unchanged. Clipboard copy falls back gracefully by still showing the full formatted text in a selectable textarea if browser copy permissions fail.
+
+**Follow-ups:** If roster posting needs alternate formats later, add templates (for Facebook, text, email) on top of the shared formatter instead of duplicating formatting logic in the screen.
+
 ### 2026-04-20 — Sync queue ordering fix for PocketBase flushes
 
 **What changed:**

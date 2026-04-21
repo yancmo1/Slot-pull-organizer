@@ -63,6 +63,51 @@ export function exportEventToCSV(event: Event, participants: Participant[]): voi
   downloadFile(csvContent, `${safeTitle}-${event.date}.csv`, 'text/csv')
 }
 
+function formatAttendeeListName(participant: Participant): string {
+  const alias = participant.alias_or_real_name?.trim()
+  if (!alias || alias === participant.display_name) {
+    return participant.display_name
+  }
+
+  return `${participant.display_name} (${alias})`
+}
+
+export function buildEventAttendeeList(event: Event, participants: Participant[]): string {
+  const activeParticipants = participants.filter((participant) => !participant.deleted_at && !participant.waitlist)
+  const waitlistedParticipants = participants.filter((participant) => !participant.deleted_at && participant.waitlist)
+  const metadataLine = [event.date, event.time, event.location].filter(Boolean).join(' • ')
+  const lines = [`🎰 ${event.title}`]
+
+  if (event.trip_label) {
+    lines.push(event.trip_label)
+  }
+
+  if (metadataLine) {
+    lines.push(metadataLine)
+  }
+
+  lines.push('')
+  lines.push(`Attendees (${activeParticipants.length})`)
+
+  if (activeParticipants.length === 0) {
+    lines.push('— None yet')
+  } else {
+    activeParticipants.forEach((participant, index) => {
+      lines.push(`${index + 1}. ${formatAttendeeListName(participant)}`)
+    })
+  }
+
+  if (waitlistedParticipants.length > 0) {
+    lines.push('')
+    lines.push(`Waitlist (${waitlistedParticipants.length})`)
+    waitlistedParticipants.forEach((participant, index) => {
+      lines.push(`${index + 1}. ${formatAttendeeListName(participant)}`)
+    })
+  }
+
+  return lines.join('\n')
+}
+
 export async function assembleBackupData(): Promise<BackupData> {
   const [events, participants, spinRoundEntries, eventSessions] = await Promise.all([
     db.events.toArray(),

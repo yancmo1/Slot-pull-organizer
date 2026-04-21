@@ -24,6 +24,28 @@ function formatRelativeSyncTime(iso: string | null): string | null {
   return `Last refreshed ${new Date(iso).toLocaleDateString()}`
 }
 
+function getPendingSyncNote(summary: SyncStatusSummary): string | null {
+  if (summary.pendingCount === 0) return null
+
+  const changeLabel = `${summary.pendingCount} local change${summary.pendingCount === 1 ? '' : 's'}`
+
+  switch (summary.mode) {
+    case 'local-only':
+      return `${changeLabel} are only saved on this device right now.`
+    case 'signed-out':
+      return `${changeLabel} are waiting here until you sign in to sync them.`
+    case 'offline':
+      return `${changeLabel} will sync automatically when you're back online.`
+    case 'partial-failure':
+      return `${changeLabel} still need sync.`
+    case 'refreshed':
+    case 'ready':
+      return `${changeLabel} are still waiting to sync to your other devices.`
+    default:
+      return null
+  }
+}
+
 export function SyncStatusCard({ summary, compact = false }: SyncStatusCardProps) {
   const tones = {
     'local-only': {
@@ -73,6 +95,7 @@ export function SyncStatusCard({ summary, compact = false }: SyncStatusCardProps
   const tone = tones[summary.mode]
   const Icon = tone.Icon
   const lastRefreshedLabel = formatRelativeSyncTime(summary.lastSuccessfulSyncAt)
+  const pendingSyncNote = getPendingSyncNote(summary)
   const sizeClasses = compact ? 'rounded-xl p-3' : 'rounded-2xl p-4'
 
   return (
@@ -98,6 +121,12 @@ export function SyncStatusCard({ summary, compact = false }: SyncStatusCardProps
           </div>
 
           <p className={`mt-1 text-xs ${tone.text}`}>{summary.detail}</p>
+
+          {pendingSyncNote && (
+            <p className="mt-2 rounded-lg bg-slate-950/20 px-2.5 py-2 text-[11px] font-medium text-white/90">
+              Unsynced changes: {pendingSyncNote}
+            </p>
+          )}
 
           {lastRefreshedLabel && (
             <p className="mt-2 text-[11px] text-slate-400">{lastRefreshedLabel}</p>

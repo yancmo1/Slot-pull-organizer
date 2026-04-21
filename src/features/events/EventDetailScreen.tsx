@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Sun, FileDown, Search, RefreshCw } from 'lucide-react'
+import { ChevronLeft, Sun, FileDown, Search, RefreshCw, Copy } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
 import { SyncStatusCard } from '../../components/SyncStatusCard'
@@ -10,7 +10,7 @@ import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
 import { useSyncStatusStore } from '../../store/syncStatusStore'
 import { calculateTotals } from '../../lib/utils/totals'
-import { exportEventToCSV } from '../../lib/utils/export'
+import { buildEventAttendeeList, exportEventToCSV } from '../../lib/utils/export'
 import { buildParticipantDraft } from '../../lib/utils/participantDefaults'
 import { getSyncStatusSummary, runSyncAction } from '../../lib/sync/status'
 import { capitalizeWords } from '../../lib/utils/formatName'
@@ -31,6 +31,8 @@ export function EventDetailScreen() {
   const [syncing, setSyncing] = useState(false)
   const [quickAddName, setQuickAddName] = useState('')
   const [quickAdding, setQuickAdding] = useState(false)
+  const [attendeeListOpen, setAttendeeListOpen] = useState(false)
+  const [copyMessage, setCopyMessage] = useState<string | null>(null)
   const syncStatus = useSyncStatusStore((state) => state.summary)
   const externalRefreshVersion = useSyncStatusStore((state) => state.externalRefreshVersion)
   const setSyncStatus = useSyncStatusStore((state) => state.setSummary)
@@ -84,6 +86,7 @@ export function EventDetailScreen() {
   )
 
   const totals = calculateTotals(participants)
+  const attendeeListText = useMemo(() => buildEventAttendeeList(event, participants), [event, participants])
 
   // Calculate capacity status
   const nonWaitlistCount = participants.filter(p => !p.waitlist).length
@@ -112,6 +115,15 @@ export function EventDetailScreen() {
       haptic.success()
     } finally {
       setQuickAdding(false)
+    }
+  }
+
+  const handleCopyAttendeeList = async () => {
+    try {
+      await navigator.clipboard.writeText(attendeeListText)
+      setCopyMessage('Attendee list copied. Paste it straight into Facebook.')
+    } catch {
+      setCopyMessage('Copy failed here, but the list below is ready to select and paste manually.')
     }
   }
 
@@ -302,7 +314,18 @@ export function EventDetailScreen() {
               </div>
             </div>
 
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end gap-2 mb-4 flex-wrap">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="gap-1.5"
+                onClick={() => {
+                  setCopyMessage(null)
+                  setAttendeeListOpen(true)
+                }}
+              >
+                <Copy size={14} />Attendee List
+              </Button>
               <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => exportEventToCSV(event, participants)}><FileDown size={14} />CSV</Button>
             </div>
           </>
@@ -354,6 +377,43 @@ export function EventDetailScreen() {
           onSave={() => setAdding(false)}
           onCancel={() => setAdding(false)}
         />
+      </Modal>
+
+      <Modal
+        open={attendeeListOpen}
+        onClose={() => {
+          setAttendeeListOpen(false)
+          setCopyMessage(null)
+        }}
+        title="Copy Attendee List"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-300">
+            This list is formatted for a quick Facebook post or message. Copy it as-is, or tweak anything before you paste.
+          </p>
+
+          {copyMessage && (
+            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-100">
+              {copyMessage}
+            </div>
+          )}
+
+          <textarea
+            readOnly
+            value={attendeeListText}
+            aria-label="Facebook-ready attendee list"
+            className="min-h-[280px] w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 focus:outline-none"
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setAttendeeListOpen(false)}>
+              Close
+            </Button>
+            <Button className="gap-2" onClick={handleCopyAttendeeList}>
+              <Copy size={15} />Copy List
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
