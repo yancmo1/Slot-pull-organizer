@@ -125,15 +125,7 @@ export function EventListScreen() {
               Archived ({archived.length})
             </button>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Sync"
-            disabled={syncing}
-            onClick={handleSync}
-          >
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-          </Button>
+
         </div>
 
         {/* Search */}
