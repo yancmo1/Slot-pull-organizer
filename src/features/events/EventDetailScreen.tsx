@@ -77,6 +77,11 @@ export function EventDetailScreen() {
   }, [externalRefreshVersion, id, loadParticipants])
 
   const event = events.find((e) => e.id === id)
+  const attendeeListText = useMemo(() => {
+    if (!event) return ''
+    return buildEventAttendeeList(event, participants)
+  }, [event, participants])
+
   if (!eventsLoaded || eventsLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
   if (!event) return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
@@ -86,7 +91,6 @@ export function EventDetailScreen() {
   )
 
   const totals = calculateTotals(participants)
-  const attendeeListText = useMemo(() => buildEventAttendeeList(event, participants), [event, participants])
 
   // Calculate capacity status
   const nonWaitlistCount = participants.filter(p => !p.waitlist).length
