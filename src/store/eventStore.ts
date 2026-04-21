@@ -23,7 +23,7 @@ export const useEventStore = create<EventStore>((set, get) => ({
   loadEvents: async () => {
     set({ loading: true })
     const events = await db.events
-      .filter((e) => e.deleted_at === null || e.deleted_at === undefined)
+      .filter((e) => !e.deleted_at)
       .toArray()
     set({ events, loading: false, loaded: true })
   },

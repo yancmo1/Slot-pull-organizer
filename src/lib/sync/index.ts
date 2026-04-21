@@ -7,6 +7,13 @@ const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
   participant: 'participants',
 }
 
+function normalizePulledRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...record,
+    deleted_at: record.deleted_at === '' ? null : record.deleted_at,
+  }
+}
+
 export async function enqueueSync(
   entity_type: SyncQueueItem['entity_type'],
   entity_id: string,
@@ -140,7 +147,10 @@ export async function pullChanges(): Promise<void> {
             collectionName: _cName,
             ...rest
           } = rec as Record<string, unknown>
-          return { ...rest, id: (localId as string | undefined) ?? pbId }
+          return {
+            ...normalizePulledRecord(rest),
+            id: (localId as string | undefined) ?? pbId,
+          }
         })
 
         if (entityType === 'event') {

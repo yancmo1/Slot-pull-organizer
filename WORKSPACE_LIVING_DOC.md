@@ -24,6 +24,21 @@ Append short entries here when changes affect:
 
 ---
 
+### 2026-04-20 — PocketBase sync bugfix: blank `deleted_at` values
+
+**What changed:**
+- `src/lib/sync/index.ts` now normalizes PocketBase records so `deleted_at: ""` becomes `null` before writing to Dexie.
+- `src/store/eventStore.ts` now treats falsy `deleted_at` values as active records when loading the event list.
+- `src/tests/eventStore.test.ts` reproduces the production payload shape (`deleted_at: ""`) and verifies synced events still appear.
+
+**Why:** PocketBase returned blank strings for unset `deleted_at`, but the event list only treated `null`/`undefined` as active. Synced events were written to IndexedDB successfully, then filtered out by the UI so the app looked empty after refresh.
+
+**Risks/mitigations:** The fix is backwards-compatible — actual deletion timestamps remain truthy and still exclude deleted records. Existing pulled records with `deleted_at: ""` start showing immediately on the next load.
+
+**Follow-ups:** Cross-device hard delete propagation still needs a dedicated design; the current full-pull strategy does not remove local records that were deleted remotely.
+
+---
+
 ### 2026-04-04 — Backup/Restore hardening + Privacy + Clear All Data
 
 **What changed:**
