@@ -1,15 +1,51 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Event } from '../types'
 
-const { filterMock, enqueueSyncMock } = vi.hoisted(() => ({
-  filterMock: vi.fn(),
+const {
+  deleteEventMock,
+  deleteEventSessionsMock,
+  deleteParticipantsMock,
+  deleteSpinRoundEntriesMock,
+  enqueueSyncMock,
+  filterMock,
+  participantToArrayMock,
+} = vi.hoisted(() => ({
+  deleteEventMock: vi.fn(),
+  deleteEventSessionsMock: vi.fn(),
+  deleteParticipantsMock: vi.fn(),
+  deleteSpinRoundEntriesMock: vi.fn(),
   enqueueSyncMock: vi.fn(),
+  filterMock: vi.fn(),
+  participantToArrayMock: vi.fn(),
 }))
 
 vi.mock('../lib/db', () => ({
   db: {
     events: {
+      delete: deleteEventMock,
       filter: filterMock,
+    },
+    participants: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          toArray: participantToArrayMock,
+          delete: deleteParticipantsMock,
+        })),
+      })),
+    },
+    spinRoundEntries: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          delete: deleteSpinRoundEntriesMock,
+        })),
+      })),
+    },
+    eventSessions: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          delete: deleteEventSessionsMock,
+        })),
+      })),
     },
   },
 }))
@@ -42,6 +78,7 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
 describe('useEventStore.loadEvents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    participantToArrayMock.mockResolvedValue([])
     useEventStore.setState({ events: [], loading: false, loaded: false })
   })
 
@@ -63,5 +100,28 @@ describe('useEventStore.loadEvents', () => {
       'event-empty',
     ])
     expect(useEventStore.getState().loaded).toBe(true)
+  })
+
+  it('queues participant deletes before deleting an event', async () => {
+    participantToArrayMock.mockResolvedValue([
+      { id: 'participant-1' },
+      { id: 'participant-2' },
+    ])
+    useEventStore.setState({
+      events: [makeEvent({ id: 'event-1' })],
+      loading: false,
+      loaded: true,
+    })
+
+    await useEventStore.getState().deleteEvent('event-1')
+
+    expect(enqueueSyncMock).toHaveBeenNthCalledWith(1, 'participant', 'participant-1', 'delete', { id: 'participant-1' })
+    expect(enqueueSyncMock).toHaveBeenNthCalledWith(2, 'participant', 'participant-2', 'delete', { id: 'participant-2' })
+    expect(enqueueSyncMock).toHaveBeenNthCalledWith(3, 'event', 'event-1', 'delete', { id: 'event-1' })
+    expect(deleteParticipantsMock).toHaveBeenCalledTimes(1)
+    expect(deleteSpinRoundEntriesMock).toHaveBeenCalledTimes(1)
+    expect(deleteEventSessionsMock).toHaveBeenCalledTimes(1)
+    expect(deleteEventMock).toHaveBeenCalledWith('event-1')
+    expect(useEventStore.getState().events).toEqual([])
   })
 })

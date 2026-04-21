@@ -26,6 +26,54 @@ const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
   participant: 'participants',
 }
 
+const SYNC_ACTION_PRIORITY: Record<SyncQueueItem['action'], number> = {
+  create: 0,
+  update: 1,
+  delete: 2,
+}
+
+function buildProtectedIdSet(
+  items: SyncQueueItem[],
+  entityType: SyncQueueItem['entity_type'],
+): Set<string> {
+  return new Set(
+    items
+      .filter((item) => item.entity_type === entityType && item.synced_at === null)
+      .map((item) => item.entity_id),
+  )
+}
+
+async function reconcilePulledCollection(
+  entityType: SyncQueueItem['entity_type'],
+  localRecords: Array<Record<string, unknown>>,
+  protectedIds: Set<string>,
+): Promise<void> {
+  const remoteIds = new Set(localRecords.map((record) => String(record.id)))
+
+  if (entityType === 'event') {
+    await db.events.bulkPut(localRecords as never)
+    const localRows = await db.events.toArray()
+    const staleIds = localRows
+      .map((record) => record.id)
+      .filter((id) => !remoteIds.has(id) && !protectedIds.has(id))
+
+    if (staleIds.length > 0) {
+      await db.events.bulkDelete(staleIds)
+    }
+    return
+  }
+
+  await db.participants.bulkPut(localRecords as never)
+  const localRows = await db.participants.toArray()
+  const staleIds = localRows
+    .map((record) => record.id)
+    .filter((id) => !remoteIds.has(id) && !protectedIds.has(id))
+
+  if (staleIds.length > 0) {
+    await db.participants.bulkDelete(staleIds)
+  }
+}
+
 function normalizePulledRecord(record: Record<string, unknown>): Record<string, unknown> {
   return {
     ...record,
@@ -53,9 +101,25 @@ export async function enqueueSync(
 }
 
 export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
-  return db.syncQueue
+  const items = await db.syncQueue
     .filter((item) => item.synced_at === null)
     .toArray()
+
+  return items.sort((a, b) => {
+    const createdAtComparison = a.created_at.localeCompare(b.created_at)
+    if (createdAtComparison !== 0) return createdAtComparison
+
+    const entityTypeComparison = a.entity_type.localeCompare(b.entity_type)
+    if (entityTypeComparison !== 0) return entityTypeComparison
+
+    const entityIdComparison = a.entity_id.localeCompare(b.entity_id)
+    if (entityIdComparison !== 0) return entityIdComparison
+
+    const actionComparison = SYNC_ACTION_PRIORITY[a.action] - SYNC_ACTION_PRIORITY[b.action]
+    if (actionComparison !== 0) return actionComparison
+
+    return a.id.localeCompare(b.id)
+  })
 }
 
 export async function getSyncQueueStats(): Promise<SyncQueueStats> {
@@ -202,6 +266,11 @@ export async function pullChanges(): Promise<PullChangesResult> {
 
   try {
     let recordCount = 0
+    const syncQueueItems = await db.syncQueue.toArray()
+    const protectedIdsByType = {
+      event: buildProtectedIdSet(syncQueueItems, 'event'),
+      participant: buildProtectedIdSet(syncQueueItems, 'participant'),
+    }
 
     for (const [entityType, collection] of Object.entries(COLLECTION_MAP)) {
       // Pull all records unconditionally. The `updated` system field is not
@@ -212,30 +281,28 @@ export async function pullChanges(): Promise<PullChangesResult> {
       })
       recordCount += records.length
 
-      if (records.length > 0) {
-        // Remap PB records to local format:
-        // - Use local_id as the record's id (our app's UUID), falling back to PB's id
-        // - Strip PB-specific metadata fields that don't belong in the local schema
-        const localRecords = records.map((rec) => {
-          const {
-            id: pbId,
-            local_id: localId,
-            collectionId: _cId,
-            collectionName: _cName,
-            ...rest
-          } = rec as Record<string, unknown>
-          return {
-            ...normalizePulledRecord(rest),
-            id: (localId as string | undefined) ?? pbId,
-          }
-        })
-
-        if (entityType === 'event') {
-          await db.events.bulkPut(localRecords as never)
-        } else if (entityType === 'participant') {
-          await db.participants.bulkPut(localRecords as never)
+      // Remap PB records to local format:
+      // - Use local_id as the record's id (our app's UUID), falling back to PB's id
+      // - Strip PB-specific metadata fields that don't belong in the local schema
+      const localRecords = records.map((rec) => {
+        const {
+          id: pbId,
+          local_id: localId,
+          collectionId: _cId,
+          collectionName: _cName,
+          ...rest
+        } = rec as Record<string, unknown>
+        return {
+          ...normalizePulledRecord(rest),
+          id: (localId as string | undefined) ?? pbId,
         }
-      }
+      })
+
+      await reconcilePulledCollection(
+        entityType as SyncQueueItem['entity_type'],
+        localRecords,
+        protectedIdsByType[entityType as SyncQueueItem['entity_type']],
+      )
     }
 
     return {

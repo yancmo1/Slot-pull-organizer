@@ -22,6 +22,33 @@ Append short entries here when changes affect:
 - workflow / automation
 - anything that could surprise future contributors
 
+### 2026-04-20 — Sync queue ordering fix for PocketBase flushes
+
+**What changed:**
+
+- `src/lib/sync/index.ts` now sorts pending sync queue items deterministically by `created_at`, then by entity/action tie-breakers so creates flush before later updates/deletes for the same record.
+- `src/tests/syncQueue.test.ts` reproduces the failure mode where a queued update can otherwise hit PocketBase before the corresponding create.
+
+**Why:** Phone/web/server mismatches can happen when the Dexie sync queue returns pending items in random UUID order. In that case an update may run before the create exists remotely, leaving failed queue items and stale data across devices.
+
+**Risks/mitigations:** The change is intentionally narrow and only affects flush ordering; payload formats and collection mappings stay the same. Tie-breakers keep same-timestamp create/update/delete sequences deterministic.
+
+**Follow-ups:** Remote hard-delete pull propagation is still a separate gap; this fix only addresses outbound queue ordering.
+
+### 2026-04-21 — Remote delete propagation + event child delete sync
+
+**What changed:**
+
+- `src/lib/sync/index.ts` now reconciles full-pull results against local Dexie tables, removing local event/participant rows that no longer exist on the server unless those rows still have unsynced queue items.
+- `src/store/eventStore.ts` now queues participant delete operations before deleting an event so PocketBase does not keep orphan participant rows behind after an event is removed.
+- `src/tests/pullChanges.test.ts` and `src/tests/eventStore.test.ts` cover remote delete reconciliation and event-child delete queueing.
+
+**Why:** Sync could previously only add/update local rows on pull. If a record was deleted on another device or directly on the server, this device would keep stale local copies forever. Event deletion also removed child participants locally without telling the server, which could leave cross-device data drift.
+
+**Risks/mitigations:** Pull reconciliation explicitly protects records that still have unsynced local queue items so failed/offline creates are not wiped out by an empty remote list. The event delete change keeps the diff narrow by only queueing related participant deletes; day-of local-only tables are unchanged.
+
+**Follow-ups:** Historical orphan participants already left on PocketBase from earlier builds may still need one-time cleanup if they were created before this fix.
+
 ---
 
 ### 2026-04-20 — Whole-dollar cashier payout breakdown

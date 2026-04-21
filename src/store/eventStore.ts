@@ -59,6 +59,10 @@ export const useEventStore = create<EventStore>((set, get) => ({
   },
 
   deleteEvent: async (id) => {
+    const participants = await db.participants.where('event_id').equals(id).toArray()
+    for (const participant of participants) {
+      await enqueueSync('participant', participant.id, 'delete', { id: participant.id })
+    }
     await db.participants.where('event_id').equals(id).delete()
     await db.spinRoundEntries.where('event_id').equals(id).delete()
     await db.eventSessions.where('event_id').equals(id).delete()
