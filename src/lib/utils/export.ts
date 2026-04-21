@@ -1,6 +1,8 @@
 import type { Event, Participant, SpinRoundEntry, EventSession } from '../../types'
 import { db } from '../db'
 
+const LAST_BACKUP_EXPORT_KEY = 'backup_last_export_at'
+
 export interface BackupData {
   schema_version: 1
   events: Event[]
@@ -8,6 +10,24 @@ export interface BackupData {
   spinRoundEntries: SpinRoundEntry[]
   eventSessions: EventSession[]
   exported_at: string
+}
+
+function sanitizeFilenamePart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function setLastBackupExportAt(value: string): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(LAST_BACKUP_EXPORT_KEY, value)
+}
+
+export function getLastBackupExportAt(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  return localStorage.getItem(LAST_BACKUP_EXPORT_KEY)
 }
 
 export function exportEventToCSV(event: Event, participants: Participant[]): void {
@@ -39,7 +59,8 @@ export function exportEventToCSV(event: Event, participants: Participant[]): voi
     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\n')
 
-  downloadFile(csvContent, `${event.title}-${event.date}.csv`, 'text/csv')
+  const safeTitle = sanitizeFilenamePart(event.title) || 'slot-pull-event'
+  downloadFile(csvContent, `${safeTitle}-${event.date}.csv`, 'text/csv')
 }
 
 export async function assembleBackupData(): Promise<BackupData> {
@@ -61,7 +82,13 @@ export async function assembleBackupData(): Promise<BackupData> {
 
 export async function exportAllToJSON(): Promise<void> {
   const data = await assembleBackupData()
-  downloadFile(JSON.stringify(data, null, 2), 'slot-pull-backup.json', 'application/json')
+  const exportedAt = new Date().toISOString()
+  setLastBackupExportAt(exportedAt)
+  downloadFile(
+    JSON.stringify({ ...data, exported_at: exportedAt }, null, 2),
+    `slot-pull-backup-${exportedAt.slice(0, 10)}.json`,
+    'application/json',
+  )
 }
 
 export function importFromJSON(file: File): Promise<BackupData> {

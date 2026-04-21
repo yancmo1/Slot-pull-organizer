@@ -14,7 +14,7 @@ An offline-first Progressive Web App (PWA) for organizing cruise slot pull event
 - **JSON Backup** — Export/import all data as a JSON backup file
 - **Offline-First** — All data stored locally in IndexedDB via Dexie.js; works fully offline after first load
 - **PWA** — Installable on iOS and Android with service worker caching
-- **Sync Queue** — Local-only sync abstraction, swappable for a backend later
+- **Optional Sync** — PocketBase-backed sync for events and participants across devices
 
 ## Tech Stack
 
@@ -47,6 +47,7 @@ npm run build
 ```
 
 Output is in the `dist/` directory. The build includes:
+
 - Optimized JS/CSS bundles
 - PWA manifest (`manifest.webmanifest`)
 - Service worker (`sw.js`) with Workbox precaching
@@ -57,14 +58,17 @@ Output is in the `dist/` directory. The build includes:
 npm test
 ```
 
-Runs 18 unit tests covering:
-- Payment status calculation logic
-- Event totals calculation (signed up, checked-in, waitlist, money totals)
-- Participant CRUD logic (soft delete, waitlist, payment status)
+Runs the automated test suite covering:
+
+- Sync status and sync edge cases
+- Payment status and totals calculations
+- Participant entry and CRUD logic
+- Backup / restore validation
+- Multi-round / day-of progress helpers
 
 ## Project Structure
 
-```
+```text
 src/
 ├── types/          # TypeScript interfaces (Event, Participant, SyncQueueItem)
 ├── lib/
@@ -84,11 +88,13 @@ src/
 ## Data Models
 
 ### Event
+
 - Title, trip label, date, time, location
 - Buy-in amount, max players, notes
 - Archived / soft-deleted flags
 
 ### Participant
+
 - Display name, alias/real name
 - Buy-in amount, amount paid, payment status (auto-calculated)
 - Checked-in, waitlist flags
@@ -107,7 +113,7 @@ The app is configured to deploy automatically to GitHub Pages using the included
 
 The next push to `main` will trigger the workflow and publish the app to:
 
-```
+```text
 https://<your-github-username>.github.io/Slot-pull-organizer/
 ```
 
@@ -130,6 +136,6 @@ If you configure a custom domain in GitHub Pages settings:
 
 ## Offline & PWA
 
-The app uses a service worker (via Workbox) to cache all assets on first load. After that, it works entirely offline. All data writes go to IndexedDB first. A sync queue captures all mutations for future backend integration.
+The app uses a service worker (via Workbox) to cache all assets on first load. After that, it works entirely offline. All data writes go to IndexedDB first. A sync queue captures all mutations for optional PocketBase sync when it is configured.
 
 To install as a PWA on iOS: open in Safari → **Share** → **Add to Home Screen**.

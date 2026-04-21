@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { db } from '../lib/db'
 import { enqueueSync } from '../lib/sync'
-import { calculatePaymentStatus } from '../lib/utils/paymentStatus'
+import { calculatePaymentStatus, getQuickPaidToggleAmount } from '../lib/utils/paymentStatus'
 import type { Participant } from '../types'
 
 interface ParticipantStore {
@@ -14,6 +14,7 @@ interface ParticipantStore {
   toggleCheckedIn: (id: string) => Promise<void>
   toggleWaitlist: (id: string) => Promise<void>
   markPaid: (id: string) => Promise<void>
+  togglePaid: (id: string) => Promise<void>
   checkInAll: (eventId: string) => Promise<void>
 }
 
@@ -84,7 +85,15 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
   markPaid: async (id) => {
     const p = get().participants.find((p) => p.id === id)
     if (!p) return
-    await get().updateParticipant(id, { amount_paid: p.buy_in_amount })
+    await get().updateParticipant(id, { amount_paid: getQuickPaidToggleAmount(p, true) })
+  },
+
+  togglePaid: async (id) => {
+    const p = get().participants.find((p) => p.id === id)
+    if (!p) return
+    await get().updateParticipant(id, {
+      amount_paid: getQuickPaidToggleAmount(p, p.payment_status !== 'paid'),
+    })
   },
 
   checkInAll: async (eventId) => {

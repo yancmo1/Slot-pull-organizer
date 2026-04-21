@@ -9,6 +9,7 @@ import type { Event } from '../../types'
 
 interface EventCardProps {
   event: Event
+  statsRefreshKey?: number
 }
 
 interface EventStats {
@@ -17,7 +18,7 @@ interface EventStats {
   remainingOwed: number
 }
 
-function useEventStats(eventId: string): EventStats | null {
+function useEventStats(eventId: string, statsRefreshKey: number): EventStats | null {
   const [stats, setStats] = useState<EventStats | null>(null)
 
   useEffect(() => {
@@ -38,17 +39,17 @@ function useEventStats(eventId: string): EventStats | null {
         setStats({ playerCount: roster.length, checkedInCount, remainingOwed })
       })
     return () => { cancelled = true }
-  }, [eventId])
+  }, [eventId, statsRefreshKey])
 
   return stats
 }
 
-export function EventCard({ event }: EventCardProps) {
+export function EventCard({ event, statsRefreshKey = 0 }: EventCardProps) {
   const navigate = useNavigate()
   const { archiveEvent, deleteEvent, duplicateEvent } = useEventStore()
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const stats = useEventStats(event.id)
+  const stats = useEventStats(event.id, statsRefreshKey)
 
   const handleArchive = async () => {
     await archiveEvent(event.id)

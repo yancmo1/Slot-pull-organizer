@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Sun, FileDown, Search, RefreshCw } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { Modal } from '../../components/Modal'
+import { SyncStatusCard } from '../../components/SyncStatusCard'
 import { ParticipantForm } from '../participants/ParticipantForm'
 import { ParticipantRow } from '../participants/ParticipantRow'
 import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
+import { useSyncStatusStore } from '../../store/syncStatusStore'
 import { calculateTotals } from '../../lib/utils/totals'
 import { exportEventToCSV } from '../../lib/utils/export'
-import { flushSyncQueue, pullChanges } from '../../lib/sync'
+import { buildParticipantDraft } from '../../lib/utils/participantDefaults'
+import { getSyncStatusSummary, runSyncAction } from '../../lib/sync/status'
+import { capitalizeWords } from '../../lib/utils/formatName'
 import { haptic } from '../../lib/utils/haptic'
 
 type Filter = 'all' | 'unpaid' | 'checked-in' | 'waitlist'
@@ -19,31 +23,56 @@ export function EventDetailScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { events, loading: eventsLoading, loaded: eventsLoaded, loadEvents } = useEventStore()
-  const { participants, loadParticipants } = useParticipantStore()
+  const { participants, loadParticipants, createParticipant } = useParticipantStore()
   const [adding, setAdding] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('custom')
   const [syncing, setSyncing] = useState(false)
+  const [quickAddName, setQuickAddName] = useState('')
+  const [quickAdding, setQuickAdding] = useState(false)
+  const syncStatus = useSyncStatusStore((state) => state.summary)
+  const externalRefreshVersion = useSyncStatusStore((state) => state.externalRefreshVersion)
+  const setSyncStatus = useSyncStatusStore((state) => state.setSummary)
+
+  const refreshEventData = useCallback(async () => {
+    await loadEvents()
+    if (id) await loadParticipants(id)
+  }, [id, loadEvents, loadParticipants])
+
+  const loadSyncStatus = useCallback(async () => {
+    setSyncStatus(await getSyncStatusSummary())
+  }, [setSyncStatus])
 
   const handleSync = async () => {
     haptic.medium()
     setSyncing(true)
     try {
-      await flushSyncQueue()
-      await pullChanges()
-      await loadEvents()
-      if (id) await loadParticipants(id)
-      haptic.success()
+      const summary = await runSyncAction(refreshEventData)
+      setSyncStatus(summary)
+      if (summary.mode === 'partial-failure') {
+        haptic.warning()
+      } else {
+        haptic.success()
+      }
     } finally {
       setSyncing(false)
     }
   }
 
   useEffect(() => {
-    loadEvents()
-    if (id) loadParticipants(id)
-  }, [id, loadEvents, loadParticipants])
+    const bootstrap = async () => {
+      await refreshEventData()
+      await loadSyncStatus()
+    }
+
+    void bootstrap()
+  }, [loadSyncStatus, refreshEventData])
+
+  useEffect(() => {
+    if (!id || externalRefreshVersion === 0) return
+    void loadParticipants(id)
+  }, [externalRefreshVersion, id, loadParticipants])
 
   const event = events.find((e) => e.id === id)
   if (!eventsLoaded || eventsLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
@@ -58,9 +87,33 @@ export function EventDetailScreen() {
 
   // Calculate capacity status
   const nonWaitlistCount = participants.filter(p => !p.waitlist).length
-  const maxPlayers = event.max_players
+  const maxPlayers = event.max_players !== null && event.max_players > 0 ? event.max_players : null
   const isAtCapacity = maxPlayers !== null && nonWaitlistCount >= maxPlayers
   const isNearCapacity = maxPlayers !== null && nonWaitlistCount >= maxPlayers * 0.9 && !isAtCapacity
+  const hasRoster = participants.length > 0
+  const hasSearchOrFilters = searchQuery.trim().length > 0 || filter !== 'all'
+
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!id || !quickAddName.trim()) return
+
+    setQuickAdding(true)
+    try {
+      await createParticipant(buildParticipantDraft({
+        eventId: id,
+        defaultBuyIn: event.buy_in_amount,
+        displayName: quickAddName,
+        existingParticipants: participants,
+        maxPlayers,
+      }))
+      setQuickAddName('')
+      setFilter('all')
+      setSearchQuery('')
+      haptic.success()
+    } finally {
+      setQuickAdding(false)
+    }
+  }
 
   const filtered = participants.filter((p) => {
     // Filter by search query
@@ -125,6 +178,45 @@ export function EventDetailScreen() {
           </div>
         </div>
 
+        {syncStatus && (
+          <div className="mb-4">
+            <SyncStatusCard summary={syncStatus} compact />
+          </div>
+        )}
+
+        <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 mb-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-white font-semibold text-sm">Quick Add</h2>
+              <p className="text-slate-400 text-xs mt-1">
+                Start with names now. Buy-in stays ${event.buy_in_amount}, and payment/check-in can wait until day-of.
+              </p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+              Add with details
+            </Button>
+          </div>
+
+          <form onSubmit={handleQuickAdd} className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              value={quickAddName}
+              onChange={(e) => setQuickAddName(capitalizeWords(e.target.value))}
+              placeholder="Type a name and keep going"
+              className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-xl px-4 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
+            />
+            <Button type="submit" disabled={quickAdding || !quickAddName.trim()} className="sm:min-w-[132px]">
+              {quickAdding ? 'Adding…' : 'Add Name'}
+            </Button>
+          </form>
+
+          <p className="text-[11px] text-slate-500 mt-2">
+            {isAtCapacity
+              ? 'This event is at capacity, so new names will land on the waitlist by default.'
+              : 'Alias, notes, payment method, and waitlist tweaks are still available in the full form.'}
+          </p>
+        </div>
+
         {/* Totals */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
@@ -162,62 +254,87 @@ export function EventDetailScreen() {
           </div>
         )}
 
-        {/* Filter tabs */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${filter === f.key ? 'bg-blue-600 text-white' : 'bg-slate-700/80 text-slate-300'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {hasRoster && (
+          <>
+            {/* Filter tabs */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+              {filters.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${filter === f.key ? 'bg-blue-600 text-white' : 'bg-slate-700/80 text-slate-300'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-        {/* Search */}
-        <div className="relative mb-4">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search participants..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
+            {/* Search */}
+            <div className="relative mb-4">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search participants..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
 
-        {/* Sort */}
-        <div className="mb-4">
-          <label className="text-slate-400 text-xs mb-2 block">Sort by</label>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {[
-              { key: 'custom' as SortBy, label: 'Custom Order' },
-              { key: 'name' as SortBy, label: 'Name (A-Z)' },
-              { key: 'payment' as SortBy, label: 'Payment Status' },
-              { key: 'checkin' as SortBy, label: 'Check-in' },
-            ].map((sort) => (
-              <button
-                key={sort.key}
-                onClick={() => setSortBy(sort.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${sortBy === sort.key ? 'bg-blue-600 text-white' : 'bg-slate-700/80 text-slate-300'}`}
-              >
-                {sort.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* Sort */}
+            <div className="mb-4">
+              <label className="text-slate-400 text-xs mb-2 block">Sort by</label>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {[
+                  { key: 'custom' as SortBy, label: 'Custom Order' },
+                  { key: 'name' as SortBy, label: 'Name (A-Z)' },
+                  { key: 'payment' as SortBy, label: 'Payment Status' },
+                  { key: 'checkin' as SortBy, label: 'Check-in' },
+                ].map((sort) => (
+                  <button
+                    key={sort.key}
+                    onClick={() => setSortBy(sort.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${sortBy === sort.key ? 'bg-blue-600 text-white' : 'bg-slate-700/80 text-slate-300'}`}
+                  >
+                    {sort.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Actions */}
-        <div className="flex gap-2 mb-4">
-          <Button size="sm" className="flex-1" onClick={() => setAdding(true)}>+ Add Participant</Button>
-          <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => exportEventToCSV(event, participants)}><FileDown size={14} />CSV</Button>
-        </div>
+            <div className="flex justify-end mb-4">
+              <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => exportEventToCSV(event, participants)}><FileDown size={14} />CSV</Button>
+            </div>
+          </>
+        )}
 
         {/* Participant list */}
         {sorted.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            <p>No participants found</p>
+          <div className="text-center py-12 text-slate-500 bg-slate-800/60 border border-slate-700 rounded-2xl">
+            {hasRoster ? (
+              <>
+                <p className="text-lg text-slate-300">No participants match this view</p>
+                <p className="text-sm text-slate-400 mt-2">Try clearing the search or switching filters.</p>
+                {hasSearchOrFilters && (
+                  <Button
+                    variant="ghost"
+                    className="mt-4"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setFilter('all')
+                      setSortBy('custom')
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-lg text-slate-300">No participants yet</p>
+                <p className="text-sm text-slate-400 mt-2">Start with names now; add payment details later.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -232,6 +349,8 @@ export function EventDetailScreen() {
         <ParticipantForm
           eventId={event.id}
           defaultBuyIn={event.buy_in_amount}
+          eventMaxPlayers={maxPlayers}
+          existingParticipants={participants}
           onSave={() => setAdding(false)}
           onCancel={() => setAdding(false)}
         />

@@ -1,38 +1,84 @@
 import { useEffect } from 'react'
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { EventListScreen } from './features/events/EventListScreen'
 import { EventDetailScreen } from './features/events/EventDetailScreen'
 import { DayOfScreen } from './features/dayof/DayOfScreen'
+import { DevSandboxScreen } from './features/dev/DevSandboxScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
-import { isPocketBaseConfigured } from './lib/sync/pocketbase'
-import { isSignedIn } from './lib/sync/auth'
-import { pullChanges, flushSyncQueue } from './lib/sync'
+import { getSyncStatusSummary, runSyncAction } from './lib/sync/status'
+import { useSyncStatusStore } from './store/syncStatusStore'
 import { useEventStore } from './store/eventStore'
 
-function App() {
+function AppShell() {
+  const location = useLocation()
+  const shouldBypassSandboxSync = import.meta.env.DEV && location.pathname === '/dev/sandbox'
+
   useEffect(() => {
-    const sync = async () => {
-      if (!isPocketBaseConfigured() || !isSignedIn()) return
-      await flushSyncQueue()
-      await pullChanges()
-      // Refresh in-memory store so the UI reflects what was just pulled
-      await useEventStore.getState().loadEvents()
+    if (shouldBypassSandboxSync) return
+
+    let isMounted = true
+
+    const publishSummary = (summary: Awaited<ReturnType<typeof getSyncStatusSummary>>, refreshedData: boolean) => {
+      if (!isMounted) return
+
+      if (refreshedData) {
+        useSyncStatusStore.getState().notifyExternalRefresh(summary)
+        return
+      }
+
+      useSyncStatusStore.getState().setSummary(summary)
     }
 
-    if (navigator.onLine) sync()
+    const sync = async () => {
+      const summary = await runSyncAction(() => useEventStore.getState().loadEvents())
+      publishSummary(summary, true)
+    }
 
-    window.addEventListener('online', sync)
-    return () => window.removeEventListener('online', sync)
-  }, [])
+    const refreshStatus = async () => {
+      const summary = await getSyncStatusSummary()
+      publishSummary(summary, false)
+    }
+
+    if (navigator.onLine) {
+      void sync()
+    } else {
+      void refreshStatus()
+    }
+
+    const handleOnline = () => {
+      void sync()
+    }
+
+    const handleOffline = () => {
+      void refreshStatus()
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      isMounted = false
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [shouldBypassSandboxSync])
 
   return (
+    <Routes>
+      <Route path="/" element={<EventListScreen />} />
+      <Route path="/event/:id" element={<EventDetailScreen />} />
+      <Route path="/event/:id/dayof" element={<DayOfScreen />} />
+      <Route path="/settings" element={<SettingsScreen />} />
+      {import.meta.env.DEV && (
+        <Route path="/dev/sandbox" element={<DevSandboxScreen />} />
+      )}
+    </Routes>
+  )
+}
+
+function App() {
+  return (
     <HashRouter>
-      <Routes>
-        <Route path="/" element={<EventListScreen />} />
-        <Route path="/event/:id" element={<EventDetailScreen />} />
-        <Route path="/event/:id/dayof" element={<DayOfScreen />} />
-        <Route path="/settings" element={<SettingsScreen />} />
-      </Routes>
+      <AppShell />
     </HashRouter>
   )
 }

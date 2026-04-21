@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculatePaymentStatus } from '../lib/utils/paymentStatus'
+import { calculatePaymentStatus, getQuickPaidToggleAmount } from '../lib/utils/paymentStatus'
 
 describe('calculatePaymentStatus', () => {
   it('returns unpaid when amount_paid is 0', () => {
@@ -22,5 +22,15 @@ describe('calculatePaymentStatus', () => {
 
   it('returns paid when amount_paid exceeds buy_in_amount', () => {
     expect(calculatePaymentStatus(25, 20)).toBe('paid')
+  })
+})
+
+describe('getQuickPaidToggleAmount', () => {
+  it('returns the full buy-in when toggled on', () => {
+    expect(getQuickPaidToggleAmount({ buy_in_amount: 20 }, true)).toBe(20)
+  })
+
+  it('returns zero when toggled off so partial amounts are not preserved', () => {
+    expect(getQuickPaidToggleAmount({ buy_in_amount: 20 }, false)).toBe(0)
   })
 })

@@ -19,7 +19,9 @@ export function EventForm({ event, onSave, onCancel }: EventFormProps) {
   const [time, setTime] = useState(event?.time ?? '')
   const [location, setLocation] = useState(event?.location ?? '')
   const [buy_in_amount, setBuyIn] = useState(String(event?.buy_in_amount ?? '20'))
-  const [max_players, setMaxPlayers] = useState(String(event?.max_players ?? ''))
+  const [max_players, setMaxPlayers] = useState(
+    event?.max_players && event.max_players > 0 ? String(event.max_players) : '',
+  )
   const [notes, setNotes] = useState(event?.notes ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -46,7 +48,7 @@ export function EventForm({ event, onSave, onCancel }: EventFormProps) {
         time: time || null,
         location: location.trim() || null,
         buy_in_amount: Number(buy_in_amount),
-        max_players: max_players ? Number(max_players) : null,
+        max_players: max_players && Number(max_players) > 0 ? Number(max_players) : null,
         notes: notes.trim() || null,
       }
       if (event) {
@@ -68,7 +70,7 @@ export function EventForm({ event, onSave, onCancel }: EventFormProps) {
       <Input label="Time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
       <Input label="Location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Casino Deck 8" />
       <Input label="Buy-In Amount ($) *" type="number" min="0" step="0.01" value={buy_in_amount} onChange={(e) => setBuyIn(e.target.value)} error={errors.buy_in_amount} />
-      <Input label="Max Players" type="number" min="1" value={max_players} onChange={(e) => setMaxPlayers(e.target.value)} placeholder="Optional" />
+      <Input label="Max Players" type="number" min="0" value={max_players} onChange={(e) => setMaxPlayers(e.target.value)} placeholder="Optional / 0 = unlimited" />
       <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <div className="flex gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel} className="flex-1">Cancel</Button>

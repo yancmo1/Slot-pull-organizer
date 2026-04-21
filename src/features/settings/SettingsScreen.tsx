@@ -1,15 +1,17 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Settings, Upload, Download, Lock, AlertTriangle, Trash2, RefreshCw, LogIn, LogOut } from 'lucide-react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Input } from '../../components/Input'
+import { SyncStatusCard } from '../../components/SyncStatusCard'
 import { useEventStore } from '../../store/eventStore'
-import { exportAllToJSON, importFromJSON } from '../../lib/utils/export'
+import { useSyncStatusStore } from '../../store/syncStatusStore'
+import { exportAllToJSON, getLastBackupExportAt, importFromJSON } from '../../lib/utils/export'
 import { db } from '../../lib/db'
 import { isPocketBaseConfigured } from '../../lib/sync/pocketbase'
 import { signIn, signOut, isSignedIn, getAuthEmail } from '../../lib/sync/auth'
-import { flushSyncQueue, pullChanges } from '../../lib/sync'
+import { getSyncStatusSummary, runSyncAction } from '../../lib/sync/status'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -18,6 +20,7 @@ export function SettingsScreen() {
   const [importing, setImporting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [lastBackupExportAt, setLastBackupExportAt] = useState<string | null>(getLastBackupExportAt())
 
   // Sync / auth state
   const pbConfigured = isPocketBaseConfigured()
@@ -27,38 +30,44 @@ export function SettingsScreen() {
   const [syncEmail_display, setSyncEmailDisplay] = useState<string | null>(getAuthEmail())
   const [syncError, setSyncError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+  const syncStatus = useSyncStatusStore((state) => state.summary)
+  const setSyncStatus = useSyncStatusStore((state) => state.setSummary)
+
+  useEffect(() => {
+    void getSyncStatusSummary().then(setSyncStatus)
+  }, [setSyncStatus])
 
   const handleSignIn = async () => {
     setSyncError(null)
+    setSyncing(true)
     try {
       await signIn(syncEmail, syncPassword)
       setSyncAuthState(true)
       setSyncEmailDisplay(getAuthEmail())
       setSyncEmail('')
       setSyncPassword('')
+      setSyncStatus(await runSyncAction(loadEvents))
     } catch {
       setSyncError('Sign in failed. Check your email and password.')
+      setSyncStatus(await getSyncStatusSummary())
+    } finally {
+      setSyncing(false)
     }
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     signOut()
     setSyncAuthState(false)
     setSyncEmailDisplay(null)
-    setSyncStatus(null)
+    setSyncStatus(await getSyncStatusSummary())
   }
 
   const handleSyncNow = async () => {
     setSyncing(true)
-    setSyncStatus(null)
     try {
-      await flushSyncQueue()
-      await pullChanges()
-      await loadEvents()
-      setSyncStatus('Synced successfully')
+      setSyncStatus(await runSyncAction(loadEvents))
     } catch {
-      setSyncStatus('Sync failed — check your connection')
+      setSyncStatus(await getSyncStatusSummary({ mode: 'partial-failure' }))
     } finally {
       setSyncing(false)
     }
@@ -66,6 +75,7 @@ export function SettingsScreen() {
 
   const handleExportJSON = async () => {
     await exportAllToJSON()
+    setLastBackupExportAt(getLastBackupExportAt())
     setMessage({ type: 'success', text: 'Backup exported successfully!' })
   }
 
@@ -78,6 +88,7 @@ export function SettingsScreen() {
       const data = await importFromJSON(file)
       if (confirm(`Import ${data.events.length} events and ${data.participants.length} participants? Your current data will be downloaded as a safety backup first.`)) {
         await exportAllToJSON()
+        setLastBackupExportAt(getLastBackupExportAt())
         await db.transaction('rw', [db.events, db.participants, db.spinRoundEntries, db.eventSessions], async () => {
           await db.events.bulkPut(data.events)
           await db.participants.bulkPut(data.participants)
@@ -104,6 +115,10 @@ export function SettingsScreen() {
     window.location.replace('/')
   }
 
+  const backupTimestampLabel = lastBackupExportAt
+    ? new Date(lastBackupExportAt).toLocaleString()
+    : 'No backup exported yet'
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="max-w-lg mx-auto px-4 py-6">
@@ -122,6 +137,7 @@ export function SettingsScreen() {
           <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
             <h2 className="text-white font-semibold mb-1">Backup & Restore</h2>
             <p className="text-slate-400 text-sm mb-4">Export all your data as a JSON backup file, or import a previous backup.</p>
+            <p className="text-slate-500 text-xs mb-4">{backupTimestampLabel}</p>
             <div className="flex flex-col gap-3">
               <Button variant="secondary" className="w-full gap-2" onClick={handleExportJSON}>
                 <Upload size={15} />Export JSON Backup
@@ -135,13 +151,19 @@ export function SettingsScreen() {
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
             <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><Lock size={15} />Privacy Notice</h2>
-            <p className="text-slate-400 text-sm">All data is stored locally on this device. JSON backups are not encrypted and contain participant names and payment details. Do not share backup files with untrusted parties.</p>
+            <p className="text-slate-400 text-sm">Your working data lives on this device first. If you enable sync, events and participants are also copied to your sync account. JSON backups are not encrypted and contain participant names and payment details, so don’t share them with untrusted parties.</p>
           </div>
 
-          {pbConfigured && (
-            <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
-              <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><RefreshCw size={15} />Sync Account</h2>
-              {syncAuthState ? (
+          <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
+            <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><RefreshCw size={15} />Sync & Storage</h2>
+            <p className="text-slate-400 text-sm mb-4">
+              {pbConfigured
+                ? 'Events and participants can sync across devices. Day-of rounds, spin progress, and session state stay on this device for now.'
+                : 'This build stores events and participants on this device only. Use backups to move data between devices.'}
+            </p>
+            {syncStatus && <div className="mb-3"><SyncStatusCard summary={syncStatus} /></div>}
+            {pbConfigured ? (
+              syncAuthState ? (
                 <>
                   <p className="text-slate-400 text-sm mb-3">Signed in as <span className="text-white">{syncEmail_display}</span></p>
                   <div className="flex flex-col gap-2">
@@ -153,9 +175,6 @@ export function SettingsScreen() {
                       <LogOut size={15} />Sign Out
                     </Button>
                   </div>
-                  {syncStatus && (
-                    <p className={`text-sm mt-2 ${syncStatus.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>{syncStatus}</p>
-                  )}
                 </>
               ) : (
                 <>
@@ -176,14 +195,16 @@ export function SettingsScreen() {
                       onChange={e => setSyncPassword(e.target.value)}
                     />
                     {syncError && <p className="text-red-400 text-sm">{syncError}</p>}
-                    <Button variant="primary" className="w-full gap-2" onClick={handleSignIn}>
+                    <Button variant="primary" className="w-full gap-2" onClick={handleSignIn} disabled={syncing}>
                       <LogIn size={15} />Sign In
                     </Button>
                   </div>
                 </>
-              )}
-            </div>
-          )}
+              )
+            ) : (
+              <p className="text-slate-400 text-sm">Sync account controls will appear here when a sync service is configured for the app.</p>
+            )}
+          </div>
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-red-900/40">
             <h2 className="text-white font-semibold mb-1 flex items-center gap-2"><AlertTriangle size={15} />Danger Zone</h2>
@@ -195,8 +216,13 @@ export function SettingsScreen() {
 
           <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
             <h2 className="text-white font-semibold mb-1">About</h2>
-            <p className="text-slate-400 text-sm">Cruise Slot Pull Organizer — offline-first PWA. All data is stored locally on your device.</p>
+            <p className="text-slate-400 text-sm">Cruise Slot Pull Organizer — offline-first PWA with optional sync for events and participants.</p>
             <p className="text-slate-500 text-xs mt-2">v1.0.0</p>
+            {import.meta.env.DEV && (
+              <Button variant="secondary" className="mt-4 w-full gap-2" onClick={() => navigate('/dev/sandbox')}>
+                <RefreshCw size={15} />Open Dev Sandbox
+              </Button>
+            )}
           </div>
         </div>
       </div>

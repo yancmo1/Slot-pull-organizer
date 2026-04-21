@@ -2,6 +2,25 @@ import { db } from '../db'
 import type { SyncQueueItem } from '../../types'
 import { getPocketBase, isPocketBaseConfigured } from './pocketbase'
 
+export interface SyncQueueStats {
+  pendingCount: number
+  failedCount: number
+}
+
+export interface FlushSyncQueueResult {
+  status: 'completed' | 'skipped'
+  skippedReason?: 'unconfigured' | 'signed-out'
+  attemptedCount: number
+  syncedCount: number
+  failedCount: number
+}
+
+export interface PullChangesResult {
+  status: 'completed' | 'failed' | 'skipped'
+  skippedReason?: 'unconfigured' | 'signed-out'
+  recordCount: number
+}
+
 const COLLECTION_MAP: Record<SyncQueueItem['entity_type'], string> = {
   event: 'events',
   participant: 'participants',
@@ -39,6 +58,14 @@ export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
     .toArray()
 }
 
+export async function getSyncQueueStats(): Promise<SyncQueueStats> {
+  const items = await db.syncQueue.toArray()
+  return {
+    pendingCount: items.filter((item) => item.synced_at === null && item.failed_at === null).length,
+    failedCount: items.filter((item) => item.synced_at === null && item.failed_at !== null).length,
+  }
+}
+
 export async function purgeSyncQueue(maxAgeDays = 30): Promise<number> {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - maxAgeDays)
@@ -68,12 +95,31 @@ async function getPBRecordIdByLocalId(
   }
 }
 
-export async function flushSyncQueue(): Promise<void> {
-  if (!isPocketBaseConfigured()) return
+export async function flushSyncQueue(): Promise<FlushSyncQueueResult> {
+  if (!isPocketBaseConfigured()) {
+    return {
+      status: 'skipped',
+      skippedReason: 'unconfigured',
+      attemptedCount: 0,
+      syncedCount: 0,
+      failedCount: 0,
+    }
+  }
   const pb = getPocketBase()
-  if (!pb.authStore.isValid) return
+  if (!pb.authStore.isValid) {
+    return {
+      status: 'skipped',
+      skippedReason: 'signed-out',
+      attemptedCount: 0,
+      syncedCount: 0,
+      failedCount: 0,
+    }
+  }
 
   const pending = await getPendingSyncItems()
+  let syncedCount = 0
+  let failedCount = 0
+
   for (const item of pending) {
     const collection = COLLECTION_MAP[item.entity_type]
     if (!collection) continue
@@ -109,24 +155,54 @@ export async function flushSyncQueue(): Promise<void> {
         const pbId = await getPBRecordIdByLocalId(pb, collection, item.entity_id)
         if (!pbId) {
           // Already deleted or never synced — mark as done
-          await db.syncQueue.update(item.id, { synced_at: new Date().toISOString() })
+          await db.syncQueue.update(item.id, {
+            synced_at: new Date().toISOString(),
+            failed_at: null,
+          })
+          syncedCount += 1
           continue
         }
         await pb.collection(collection).delete(pbId, { requestKey: null })
       }
-      await db.syncQueue.update(item.id, { synced_at: new Date().toISOString() })
+      await db.syncQueue.update(item.id, {
+        synced_at: new Date().toISOString(),
+        failed_at: null,
+      })
+      syncedCount += 1
     } catch {
       await db.syncQueue.update(item.id, { failed_at: new Date().toISOString() })
+      failedCount += 1
     }
+  }
+
+  return {
+    status: 'completed',
+    attemptedCount: pending.length,
+    syncedCount,
+    failedCount,
   }
 }
 
-export async function pullChanges(): Promise<void> {
-  if (!isPocketBaseConfigured()) return
+export async function pullChanges(): Promise<PullChangesResult> {
+  if (!isPocketBaseConfigured()) {
+    return {
+      status: 'skipped',
+      skippedReason: 'unconfigured',
+      recordCount: 0,
+    }
+  }
   const pb = getPocketBase()
-  if (!pb.authStore.isValid) return
+  if (!pb.authStore.isValid) {
+    return {
+      status: 'skipped',
+      skippedReason: 'signed-out',
+      recordCount: 0,
+    }
+  }
 
   try {
+    let recordCount = 0
+
     for (const [entityType, collection] of Object.entries(COLLECTION_MAP)) {
       // Pull all records unconditionally. The `updated` system field is not
       // exposed by the collection's API rules, making date-filtered queries
@@ -134,6 +210,7 @@ export async function pullChanges(): Promise<void> {
       const records = await pb.collection(collection).getFullList({
         requestKey: null,
       })
+      recordCount += records.length
 
       if (records.length > 0) {
         // Remap PB records to local format:
@@ -160,7 +237,16 @@ export async function pullChanges(): Promise<void> {
         }
       }
     }
+
+    return {
+      status: 'completed',
+      recordCount,
+    }
   } catch (err) {
     console.error('[pullChanges] sync error:', err)
+    return {
+      status: 'failed',
+      recordCount: 0,
+    }
   }
 }

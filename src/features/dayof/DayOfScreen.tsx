@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Play, CheckCheck, RefreshCw, Calculator, DollarSign, Banknote, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, Play, CheckCheck, RefreshCw, Calculator, DollarSign, Banknote } from 'lucide-react'
 import { useEventStore } from '../../store/eventStore'
 import { useParticipantStore } from '../../store/participantStore'
 import { useSpinRoundStore } from '../../store/spinRoundStore'
@@ -9,10 +9,38 @@ import { Button } from '../../components/Button'
 import { NumberPad } from '../../components/NumberPad'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Modal } from '../../components/Modal'
-import { calculateBillBreakdown, DENOMINATIONS } from '../../lib/utils/billBreakdown'
-import type { Participant } from '../../types'
+import { calculateCashierBillPlan, DENOMINATIONS } from '../../lib/utils/billBreakdown'
+import {
+  getDayOfPriorityLabel,
+  matchesDayOfFilter,
+  sortDayOfParticipants,
+  type DayOfFilter,
+} from '../../lib/utils/dayOfPriority'
+import { DayOfParticipantCard } from './DayOfParticipantCard'
 
-type Filter = 'all' | 'unpaid' | 'unchecked'
+const ROUND_PROGRESS_WIDTH_CLASSES = [
+  'w-0',
+  'w-[5%]',
+  'w-[10%]',
+  'w-[15%]',
+  'w-[20%]',
+  'w-[25%]',
+  'w-[30%]',
+  'w-[35%]',
+  'w-[40%]',
+  'w-[45%]',
+  'w-1/2',
+  'w-[55%]',
+  'w-[60%]',
+  'w-[65%]',
+  'w-[70%]',
+  'w-3/4',
+  'w-[80%]',
+  'w-[85%]',
+  'w-[90%]',
+  'w-[95%]',
+  'w-full',
+] as const
 
 export function DayOfScreen() {
   const { id } = useParams<{ id: string }>()
@@ -33,7 +61,7 @@ export function DayOfScreen() {
     getSpunIdsForRound,
   } = useSpinRoundStore()
 
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<DayOfFilter>('all')
   const [playMode, setPlayMode] = useState(false)
   const [totalCredits, setTotalCredits] = useState('')
   const [showCalculator, setShowCalculator] = useState(false)
@@ -74,24 +102,48 @@ export function DayOfScreen() {
   const currentRoundSpunCount = checkedInRoster.filter(p => currentRoundSpunIds.has(p.id)).length
   const currentRoundRemainingCount = checkedInRoster.length - currentRoundSpunCount
   const allCurrentRoundSpun = checkedInRoster.length > 0 && currentRoundRemainingCount === 0
+  const roundProgressBucket = checkedInRoster.length === 0
+    ? 0
+    : Math.min(
+        ROUND_PROGRESS_WIDTH_CLASSES.length - 1,
+        Math.round((currentRoundSpunCount / checkedInRoster.length) * (ROUND_PROGRESS_WIDTH_CLASSES.length - 1)),
+      )
+  const roundProgressWidthClass = ROUND_PROGRESS_WIDTH_CLASSES[roundProgressBucket]
+  const unpaidCount = roster.filter((participant) => participant.payment_status !== 'paid').length
+  const needsActionCount = roster.filter((participant) => !participant.checked_in || participant.payment_status !== 'paid').length
 
   // In play mode, only show checked-in participants
   const visibleRoster = playMode ? checkedInRoster : roster
+  const effectiveFilter: DayOfFilter = playMode
+    ? filter === 'unchecked' || filter === 'needs-action'
+      ? 'remaining'
+      : filter
+    : filter === 'remaining'
+    ? 'needs-action'
+    : filter
 
-  const filtered = visibleRoster.filter((p) => {
-    if (filter === 'unpaid') return p.payment_status !== 'paid'
-    if (filter === 'unchecked') return !p.checked_in
-    return true
+  const filtered = visibleRoster.filter((participant) => matchesDayOfFilter(participant, effectiveFilter, {
+    playMode,
+    spunIds: currentRoundSpunIds,
+  }))
+
+  const sortedFiltered = sortDayOfParticipants(filtered, {
+    playMode,
+    spunIds: currentRoundSpunIds,
   })
 
-  // In play mode, spun players sink to the bottom; unspun stay at the top
-  const sortedFiltered = playMode
-    ? [...filtered].sort((a, b) => {
-        const aSpun = currentRoundSpunIds.has(a.id) ? 1 : 0
-        const bSpun = currentRoundSpunIds.has(b.id) ? 1 : 0
-        return aSpun - bSpun
-      })
-    : filtered
+  const filterChips: Array<{ key: DayOfFilter; label: string }> = playMode
+    ? [
+        { key: 'all', label: `All (${checkedInRoster.length})` },
+        { key: 'remaining', label: `Remaining (${currentRoundRemainingCount})` },
+        { key: 'unpaid', label: `Unpaid (${checkedInRoster.filter((participant) => participant.payment_status !== 'paid').length})` },
+      ]
+    : [
+        { key: 'all', label: `All (${roster.length})` },
+        { key: 'needs-action', label: `Needs Action (${needsActionCount})` },
+        { key: 'unpaid', label: `Unpaid (${unpaidCount})` },
+        { key: 'unchecked', label: `Not In (${notCheckedInCount})` },
+      ]
 
   const handleToggleSpin = async (participantId: string) => {
     if (!id) return
@@ -236,8 +288,7 @@ export function DayOfScreen() {
               {checkedInRoster.length > 0 && (
                 <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                    style={{ width: `${(currentRoundSpunCount / checkedInRoster.length) * 100}%` }}
+                    className={`h-full bg-blue-500 rounded-full transition-all duration-300 ${roundProgressWidthClass}`}
                   />
                 </div>
               )}
@@ -265,17 +316,21 @@ export function DayOfScreen() {
           </div>
 
           {/* Filter chips */}
-          <div className="flex gap-2">
-            {(['all', 'unpaid', 'unchecked'] as Filter[]).map((f) => (
+          <div className="flex gap-2 flex-wrap">
+            {filterChips.map((chip) => (
               <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors ${filter === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+                key={chip.key}
+                onClick={() => setFilter(chip.key)}
+                className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors ${effectiveFilter === chip.key ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
               >
-                {f === 'all' ? `All (${roster.length})` : f === 'unpaid' ? `Unpaid` : `Not In`}
+                {chip.label}
               </button>
             ))}
           </div>
+
+          <p className="text-[11px] text-slate-500 px-1">
+            Round progress and spin history stay on this device for now.
+          </p>
         </div>
 
         {/* "Everyone has spun" banner */}
@@ -299,41 +354,6 @@ export function DayOfScreen() {
               >
                 End Session
               </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Participant cards */}
-        <div className="px-4 pt-3 flex flex-col gap-2">
-          {sortedFiltered.map((p) => (
-            <DayOfParticipantCard
-              key={p.id}
-              participant={p}
-              onCheckin={() => toggleCheckedIn(p.id)}
-              onPaid={() => markPaid(p.id)}
-              playMode={playMode}
-              hasSpun={currentRoundSpunIds.has(p.id)}
-              onToggleSpin={() => handleToggleSpin(p.id)}
-            />
-          ))}
-          {sortedFiltered.length === 0 && (
-            <div className="text-center py-8 text-slate-500 text-sm">No participants match this filter</div>
-          )}
-        </div>
-
-        {/* Waitlist */}
-        {participants.filter(p => p.waitlist).length > 0 && (
-          <div className="px-4 mt-4">
-            <h2 className="text-slate-400 text-sm font-medium mb-2">Waitlist ({participants.filter(p => p.waitlist).length})</h2>
-            <div className="flex flex-col gap-1.5">
-              {participants.filter(p => p.waitlist).map((p) => (
-                <div key={p.id} className="bg-slate-800 rounded-xl px-3 py-2 border border-slate-700">
-                  <span className="text-slate-300 text-sm">{p.display_name}</span>
-                  {p.alias_or_real_name && (
-                    <span className="text-slate-500 text-xs ml-2">{p.alias_or_real_name}</span>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -401,6 +421,42 @@ export function DayOfScreen() {
             </div>
           )}
         </div>
+
+        {/* Participant cards */}
+        <div className="px-4 pt-3 flex flex-col gap-2">
+          {sortedFiltered.map((p) => (
+            <DayOfParticipantCard
+              key={p.id}
+              participant={p}
+              onCheckin={() => toggleCheckedIn(p.id)}
+              onPaid={() => markPaid(p.id)}
+              playMode={playMode}
+              hasSpun={currentRoundSpunIds.has(p.id)}
+              priorityLabel={getDayOfPriorityLabel(p, { playMode, spunIds: currentRoundSpunIds })}
+              onToggleSpin={() => handleToggleSpin(p.id)}
+            />
+          ))}
+          {sortedFiltered.length === 0 && (
+            <div className="text-center py-8 text-slate-500 text-sm">No participants match this filter</div>
+          )}
+        </div>
+
+        {/* Waitlist */}
+        {participants.filter(p => p.waitlist).length > 0 && (
+          <div className="px-4 mt-4">
+            <h2 className="text-slate-400 text-sm font-medium mb-2">Waitlist ({participants.filter(p => p.waitlist).length})</h2>
+            <div className="flex flex-col gap-1.5">
+              {participants.filter(p => p.waitlist).map((p) => (
+                <div key={p.id} className="bg-slate-800 rounded-xl px-3 py-2 border border-slate-700">
+                  <span className="text-slate-300 text-sm">{p.display_name}</span>
+                  {p.alias_or_real_name && (
+                    <span className="text-slate-500 text-xs ml-2">{p.alias_or_real_name}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
@@ -442,103 +498,6 @@ export function DayOfScreen() {
   )
 }
 
-function DayOfParticipantCard({
-  participant,
-  onCheckin,
-  onPaid,
-  playMode,
-  hasSpun,
-  onToggleSpin,
-}: {
-  participant: Participant
-  onCheckin: () => void
-  onPaid: () => void
-  playMode?: boolean
-  hasSpun?: boolean
-  onToggleSpin?: () => void
-}) {
-  const isPaid = participant.payment_status === 'paid'
-  const isPartial = participant.payment_status === 'partial'
-
-  const paymentBadgeClass = isPaid
-    ? 'bg-green-900 text-green-200'
-    : isPartial
-    ? 'bg-yellow-900 text-yellow-200'
-    : 'bg-red-900 text-red-200'
-
-  const paymentBadgeText = isPaid
-    ? 'Paid'
-    : `$${participant.amount_paid}/$${participant.buy_in_amount}`
-
-  return (
-    <div
-      className={`bg-slate-800 rounded-xl px-3 py-2.5 border-2 transition-colors ${
-        hasSpun
-          ? 'border-purple-600 bg-purple-900/20'
-          : participant.checked_in
-          ? 'border-green-700'
-          : 'border-slate-700'
-      }`}
-    >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1 min-w-0 mr-2">
-          <p className="text-white font-semibold text-base leading-tight truncate">
-            {participant.display_name}
-          </p>
-          {participant.alias_or_real_name && (
-            <p className="text-slate-400 text-xs leading-tight mt-0.5 truncate">
-              {participant.alias_or_real_name}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {hasSpun && (
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
-              <CheckCircle2 size={11} />Spun
-            </span>
-          )}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${paymentBadgeClass}`}>
-            {paymentBadgeText}
-          </span>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        {playMode && onToggleSpin ? (
-          <Button
-            size="md"
-            variant={hasSpun ? 'primary' : 'secondary'}
-            className="flex-1 gap-1.5"
-            onClick={onToggleSpin}
-          >
-            {hasSpun ? <><CheckCircle2 size={14} />Has Spun</> : 'Mark as Spun'}
-          </Button>
-        ) : (
-          <>
-            <Button
-              size="md"
-              variant={participant.checked_in ? 'primary' : 'secondary'}
-              className="flex-1"
-              onClick={onCheckin}
-            >
-              {participant.checked_in ? '✓ Checked In' : 'Check In'}
-            </Button>
-            {!isPaid && (
-              <Button
-                size="md"
-                variant="secondary"
-                className="flex-1"
-                onClick={onPaid}
-              >
-                Mark Paid
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function BillBreakdownModal({
   open,
   onClose,
@@ -550,25 +509,41 @@ function BillBreakdownModal({
   perPerson: number
   checkedInCount: number
 }) {
-  const perPersonBreakdown = calculateBillBreakdown(perPerson)
-  const totalBreakdown = calculateBillBreakdown(perPerson * checkedInCount)
+  const {
+    perPersonWholeAmount,
+    totalWholeAmount,
+    droppedCentsTotal,
+    perPersonBreakdown,
+    totalBreakdown,
+    cashierBreakdown,
+  } = calculateCashierBillPlan(perPerson, checkedInCount)
+
+  const perPersonBundleSummary = DENOMINATIONS
+    .filter((denom) => perPersonBreakdown[denom] > 0)
+    .map((denom) => `${perPersonBreakdown[denom]} × $${denom}`)
+    .join(' · ')
 
   return (
     <Modal open={open} onClose={onClose} title="Bill Breakdown">
       <div className="space-y-4">
         <p className="text-slate-400 text-sm">
-          How many bills you need to pay each person and in total.
+          Whole-dollar payout plan for each player, the full payout total, and the exact bills to grab from the cashier.
         </p>
+
+        {droppedCentsTotal > 0 && (
+          <div className="rounded-xl border border-amber-700 bg-amber-900/30 p-3">
+            <p className="text-amber-200 text-sm font-medium">Cents removed from payout totals</p>
+            <p className="text-amber-300 text-xs mt-1">
+              The calculator shows ${perPerson.toFixed(2)} per player, but the cash plan uses ${perPersonWholeAmount.toFixed(0)} each.
+              ${droppedCentsTotal.toFixed(2)} stays out of this payout total.
+            </p>
+          </div>
+        )}
 
         {/* Per person breakdown */}
         <div>
           <h3 className="text-white font-semibold text-sm mb-2">
-            Per Person — ${Math.floor(perPerson).toFixed(0)}
-            {perPersonBreakdown.remainder > 0 && (
-              <span className="text-slate-400 text-xs ml-1">
-                (${perPerson.toFixed(2)} rounded down)
-              </span>
-            )}
+            Per Person — ${perPersonWholeAmount.toFixed(0)}
           </h3>
           <div className="grid grid-cols-5 gap-1.5">
             {DENOMINATIONS.map((denom) => (
@@ -587,17 +562,12 @@ function BillBreakdownModal({
               </div>
             ))}
           </div>
-          {perPersonBreakdown.remainder > 0 && (
-            <p className="text-slate-500 text-xs mt-1.5">
-              + ${perPersonBreakdown.remainder.toFixed(2)} remaining per person
-            </p>
-          )}
         </div>
 
         {/* Total breakdown */}
         <div>
           <h3 className="text-white font-semibold text-sm mb-2">
-            Total for All {checkedInCount} Players — ${Math.floor(perPerson * checkedInCount).toFixed(0)}
+            Total for All {checkedInCount} Players — ${totalWholeAmount.toFixed(0)}
           </h3>
           <div className="grid grid-cols-5 gap-1.5">
             {DENOMINATIONS.map((denom) => (
@@ -616,11 +586,34 @@ function BillBreakdownModal({
               </div>
             ))}
           </div>
-          {totalBreakdown.remainder > 0 && (
-            <p className="text-slate-500 text-xs mt-1.5">
-              + ${totalBreakdown.remainder.toFixed(2)} remaining total
-            </p>
-          )}
+        </div>
+
+        {/* Cashier pickup breakdown */}
+        <div>
+          <h3 className="text-white font-semibold text-sm mb-2">
+            Get From Cashier — ${totalWholeAmount.toFixed(0)} ready to distribute
+          </h3>
+          <p className="text-slate-400 text-xs mb-2">
+            Grab this mix so each player can be paid with the same bill bundle quickly.
+            {perPersonBundleSummary ? ` Per player: ${perPersonBundleSummary}.` : ' No whole-dollar bills are needed per player.'}
+          </p>
+          <div className="grid grid-cols-5 gap-1.5">
+            {DENOMINATIONS.map((denom) => (
+              <div
+                key={denom}
+                className={`rounded-xl p-2 text-center border ${
+                  cashierBreakdown[denom] > 0
+                    ? 'bg-purple-900/30 border-purple-700'
+                    : 'bg-slate-800 border-slate-700 opacity-40'
+                }`}
+              >
+                <div className="text-slate-300 text-xs">${denom}</div>
+                <div className="text-white font-bold text-lg leading-tight">
+                  {cashierBreakdown[denom]}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </Modal>

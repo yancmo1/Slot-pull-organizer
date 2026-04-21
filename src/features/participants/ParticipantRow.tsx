@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MoreVertical, Pencil, Trash2, Check, Circle } from 'lucide-react'
+import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -13,11 +13,12 @@ interface ParticipantRowProps {
 }
 
 export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProps) {
-  const { toggleCheckedIn, deleteParticipant } = useParticipantStore()
+  const { toggleCheckedIn, togglePaid, deleteParticipant } = useParticipantStore()
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  const isPaid = participant.payment_status === 'paid'
   const isOverpaid = participant.amount_paid > participant.buy_in_amount
 
   const handleDelete = () => {
@@ -28,14 +29,7 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
   return (
     <>
       <div className={`bg-slate-800 rounded-xl p-3 border ${participant.waitlist ? 'border-slate-600' : 'border-slate-700'}`}>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => toggleCheckedIn(participant.id)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${participant.checked_in ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
-            aria-label={participant.checked_in ? 'Checked in' : 'Not checked in'}
-          >
-            {participant.checked_in ? <Check size={16} strokeWidth={2.5} /> : <Circle size={16} />}
-          </button>
+        <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-white font-medium truncate">{participant.display_name}</span>
@@ -54,6 +48,30 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
                   {participant.payment_method}
                 </span>
               )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={participant.checked_in}
+                  onChange={() => {
+                    void toggleCheckedIn(participant.id)
+                  }}
+                  className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+                />
+                <span>Checked in</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isPaid}
+                  onChange={() => {
+                    void togglePaid(participant.id)
+                  }}
+                  className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+                />
+                <span>Paid</span>
+              </label>
             </div>
           </div>
           <div className="relative flex-shrink-0">
