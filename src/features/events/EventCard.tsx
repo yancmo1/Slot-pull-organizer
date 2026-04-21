@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MoreVertical, Pencil, Copy, Archive, Trash2, Calendar, Clock, MapPin, DollarSign, Users, UserCheck } from 'lucide-react'
 import { Modal } from '../../components/Modal'
@@ -50,6 +50,31 @@ export function EventCard({ event, statsRefreshKey = 0 }: EventCardProps) {
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const stats = useEventStats(event.id, statsRefreshKey)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   const handleArchive = async () => {
     await archiveEvent(event.id)
@@ -95,7 +120,7 @@ export function EventCard({ event, statsRefreshKey = 0 }: EventCardProps) {
               </div>
             )}
           </button>
-          <div className="relative">
+          <div ref={menuRef} className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-700/50 min-h-[44px] min-w-[44px] flex items-center justify-center transition-all ripple"

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import { Modal } from '../../components/Modal'
@@ -17,9 +17,34 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
   const [editing, setEditing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
 
   const isPaid = participant.payment_status === 'paid'
   const isOverpaid = participant.amount_paid > participant.buy_in_amount
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   const handleDelete = () => {
     deleteParticipant(participant.id)
@@ -74,7 +99,7 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
               </label>
             </div>
           </div>
-          <div className="relative flex-shrink-0">
+          <div ref={menuRef} className="relative flex-shrink-0">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               aria-label="Options"
