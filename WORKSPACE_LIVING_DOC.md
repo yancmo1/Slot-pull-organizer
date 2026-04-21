@@ -37,6 +37,20 @@ Append short entries here when changes affect:
 
 **Follow-ups:** If roster posting needs alternate formats later, add templates (for Facebook, text, email) on top of the shared formatter instead of duplicating formatting logic in the screen.
 
+### 2026-04-21 — Sync card auto-hide when no action is needed
+
+**What changed:**
+
+- `src/store/syncStatusStore.ts` now hides the shared sync card automatically when the summary is fully clean (`ready`/`refreshed` with no pending or failed changes).
+- A freshly successful sync still shows the success card briefly, then dismisses itself after 5 seconds instead of lingering on the page.
+- `src/tests/syncStatusStore.test.ts` covers immediate hiding for steady-state ready summaries and delayed hiding for post-sync refreshed summaries.
+
+**Why:** Once everything is synced and there is nothing actionable to show, the status card becomes visual clutter. Keeping the post-sync success state visible briefly still reassures the user that their manual sync worked.
+
+**Risks/mitigations:** Only clean, zero-action summaries auto-hide. Offline, signed-out, pending, failed, and local-only states remain visible so trust and troubleshooting cues are not lost.
+
+**Follow-ups:** If users later want to reopen hidden success states manually, add a compact sync-history affordance instead of keeping the full card always mounted.
+
 ### 2026-04-20 — Sync queue ordering fix for PocketBase flushes
 
 **What changed:**
