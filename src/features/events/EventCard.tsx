@@ -70,7 +70,7 @@ export function EventCard({ event, statsRefreshKey = 0 }: EventCardProps) {
 
   return (
     <>
-      <div className="glass-light rounded-2xl p-4 border border-slate-700/50 card-hover shadow-lg">
+      <div className={`glass-light rounded-2xl p-4 border border-slate-700/50 card-hover shadow-lg relative ${menuOpen ? 'z-30' : 'z-0'}`}>
         <div className="flex items-start justify-between gap-2">
           <button
             className="flex-1 text-left ripple"
@@ -104,7 +104,7 @@ export function EventCard({ event, statsRefreshKey = 0 }: EventCardProps) {
               <MoreVertical size={18} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 glass rounded-xl shadow-xl border border-slate-600/50 z-10 min-w-[160px] slide-up">
+              <div className="absolute right-0 top-full mt-1 glass rounded-xl shadow-2xl border border-slate-600/50 z-50 min-w-[160px] slide-up">
                 <button onClick={() => { setEditing(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600/50 rounded-t-xl transition-all ripple flex items-center gap-2.5"><Pencil size={14} />Edit</button>
                 <button onClick={handleDuplicate} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600/50 transition-all ripple flex items-center gap-2.5"><Copy size={14} />Duplicate</button>
                 {!event.archived && <button onClick={handleArchive} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600/50 transition-all ripple flex items-center gap-2.5"><Archive size={14} />Archive</button>}

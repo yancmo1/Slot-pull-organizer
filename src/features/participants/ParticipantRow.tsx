@@ -28,7 +28,7 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
 
   return (
     <>
-      <div className={`bg-slate-800 rounded-xl p-3 border ${participant.waitlist ? 'border-slate-600' : 'border-slate-700'}`}>
+      <div className={`bg-slate-800 rounded-xl p-3 border relative ${menuOpen ? 'z-30' : 'z-0'} ${participant.waitlist ? 'border-slate-600' : 'border-slate-700'}`}>
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -83,7 +83,7 @@ export function ParticipantRow({ participant, defaultBuyIn }: ParticipantRowProp
               <MoreVertical size={18} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-slate-700 rounded-xl shadow-xl border border-slate-600 z-10 min-w-[150px]">
+              <div className="absolute right-0 top-full mt-1 bg-slate-700 rounded-xl shadow-2xl border border-slate-600 z-50 min-w-[150px]">
                 <button onClick={() => { setEditing(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-white hover:bg-slate-600 rounded-t-xl flex items-center gap-2.5"><Pencil size={14} />Edit</button>
                 <button onClick={() => { setShowDeleteConfirm(true); setMenuOpen(false) }} className="w-full text-left px-4 py-3 text-red-400 hover:bg-slate-600 rounded-b-xl flex items-center gap-2.5"><Trash2 size={14} />Remove</button>
               </div>
