@@ -22,6 +22,19 @@ Append short entries here when changes affect:
 - workflow / automation
 - anything that could surprise future contributors
 
+### 2026-05-27 — Quick-add duplicate finder + sort-aware attendee exports
+
+**What changed:**
+
+- `src/features/events/EventDetailScreen.tsx` now shows live duplicate warnings in Quick Add when typed names match an existing participant name or alias (case-insensitive), and asks for confirmation before saving a duplicate.
+- Event attendee-list preview/copy text and CSV export now both use the current `Sort by` selection instead of raw insertion order.
+
+**Why:** This supports rapid list entry with fewer accidental duplicates, while keeping export output aligned with what users intentionally selected in the sort UI.
+
+**Risks/mitigations:** Duplicate handling is advisory plus confirm (not a hard block), so legitimate same-name entries are still possible when intended.
+
+**Follow-ups:** If users want fuzzy duplicate checks (nickname/partial matching), move the matching logic into a dedicated utility with configurable rules.
+
 ### 2026-04-21 — Pending sync note + Facebook-ready attendee list
 
 **What changed:**

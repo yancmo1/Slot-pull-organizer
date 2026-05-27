@@ -19,6 +19,10 @@ import { haptic } from '../../lib/utils/haptic'
 type Filter = 'all' | 'unpaid' | 'checked-in' | 'waitlist'
 type SortBy = 'name' | 'payment' | 'checkin' | 'custom'
 
+function normalizeNameForDuplicateCheck(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 export function EventDetailScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -76,11 +80,49 @@ export function EventDetailScreen() {
     void loadParticipants(id)
   }, [externalRefreshVersion, id, loadParticipants])
 
+  const compareParticipants = (a: typeof participants[number], b: typeof participants[number]) => {
+    switch (sortBy) {
+      case 'name':
+        return a.display_name.localeCompare(b.display_name)
+      case 'payment': {
+        const statusOrder = { unpaid: 0, partial: 1, paid: 2 }
+        return statusOrder[a.payment_status] - statusOrder[b.payment_status]
+      }
+      case 'checkin':
+        return (a.checked_in ? 1 : 0) - (b.checked_in ? 1 : 0)
+      case 'custom':
+      default:
+        if (a.sort_order !== null && b.sort_order !== null) {
+          return a.sort_order - b.sort_order
+        }
+        return 0
+    }
+  }
+
+  const sortedParticipantsForExport = useMemo(() => {
+    return [...participants]
+      .filter((participant) => !participant.deleted_at)
+      .sort(compareParticipants)
+  }, [participants, sortBy])
+
+  const duplicateMatches = useMemo(() => {
+    const target = normalizeNameForDuplicateCheck(quickAddName)
+    if (!target) return [] as string[]
+
+    return participants
+      .filter((participant) => !participant.deleted_at)
+      .filter((participant) => (
+        normalizeNameForDuplicateCheck(participant.display_name) === target
+        || normalizeNameForDuplicateCheck(participant.alias_or_real_name) === target
+      ))
+      .map((participant) => participant.display_name)
+  }, [participants, quickAddName])
+
   const event = events.find((e) => e.id === id)
   const attendeeListText = useMemo(() => {
     if (!event) return ''
-    return buildEventAttendeeList(event, participants)
-  }, [event, participants])
+    return buildEventAttendeeList(event, sortedParticipantsForExport)
+  }, [event, sortedParticipantsForExport])
 
   if (!eventsLoaded || eventsLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>
   if (!event) return (
@@ -103,6 +145,14 @@ export function EventDetailScreen() {
   const handleQuickAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!id || !quickAddName.trim()) return
+
+    if (duplicateMatches.length > 0) {
+      haptic.warning()
+      const shouldContinue = confirm(
+        `Possible duplicate found: ${duplicateMatches.join(', ')}. Add anyway?`,
+      )
+      if (!shouldContinue) return
+    }
 
     setQuickAdding(true)
     try {
@@ -148,25 +198,7 @@ export function EventDetailScreen() {
   })
 
   // Sort participants
-  const sorted = [...filtered].sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return a.display_name.localeCompare(b.display_name)
-      case 'payment': {
-        const statusOrder = { unpaid: 0, partial: 1, paid: 2 }
-        return statusOrder[a.payment_status] - statusOrder[b.payment_status]
-      }
-      case 'checkin':
-        return (a.checked_in ? 1 : 0) - (b.checked_in ? 1 : 0)
-      case 'custom':
-      default:
-        // Use sort_order if available, otherwise maintain insertion order
-        if (a.sort_order !== null && b.sort_order !== null) {
-          return a.sort_order - b.sort_order
-        }
-        return 0
-    }
-  })
+  const sorted = [...filtered].sort(compareParticipants)
 
   const filters: { key: Filter; label: string }[] = [
     { key: 'all', label: `All (${participants.length})` },
@@ -225,6 +257,12 @@ export function EventDetailScreen() {
               {quickAdding ? 'Adding…' : 'Add Name'}
             </Button>
           </form>
+
+          {duplicateMatches.length > 0 && (
+            <p className="text-[11px] text-amber-300 mt-2">
+              Possible duplicate{duplicateMatches.length === 1 ? '' : 's'}: {duplicateMatches.join(', ')}
+            </p>
+          )}
 
           <p className="text-[11px] text-slate-500 mt-2">
             {isAtCapacity
@@ -330,7 +368,7 @@ export function EventDetailScreen() {
               >
                 <Copy size={14} />Attendee List
               </Button>
-              <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => exportEventToCSV(event, participants)}><FileDown size={14} />CSV</Button>
+              <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => exportEventToCSV(event, sortedParticipantsForExport)}><FileDown size={14} />CSV</Button>
             </div>
           </>
         )}
