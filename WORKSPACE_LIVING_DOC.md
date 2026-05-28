@@ -35,6 +35,19 @@ Append short entries here when changes affect:
 
 **Follow-ups:** If users want fuzzy duplicate checks (nickname/partial matching), move the matching logic into a dedicated utility with configurable rules.
 
+### 2026-05-28 — Automatic background sync after saves
+
+**What changed:**
+
+- `src/lib/sync/index.ts` now schedules a debounced background sync whenever local changes are queued (`enqueueSync`), automatically flushing and pulling without requiring a manual Sync tap.
+- `src/App.tsx` now runs a periodic background sync heartbeat every 30 seconds while the app is open and online.
+
+**Why:** Users can make valid local saves and still end up with cross-device mismatches when manual sync is skipped. Automatic background sync closes that gap and makes data propagation feel hands-off.
+
+**Risks/mitigations:** Background sync checks online/configured/signed-in state and no-ops otherwise. Debounce + in-flight guards prevent sync storms during rapid multi-field edits.
+
+**Follow-ups:** For unsaved form edits (before tapping Save), consider draft autosave/restore in a separate change if users want “save button optional” behavior.
+
 ### 2026-04-21 — Pending sync note + Facebook-ready attendee list
 
 **What changed:**

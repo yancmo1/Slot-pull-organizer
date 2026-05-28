@@ -9,6 +9,8 @@ import { getSyncStatusSummary, runSyncAction } from './lib/sync/status'
 import { useSyncStatusStore } from './store/syncStatusStore'
 import { useEventStore } from './store/eventStore'
 
+const BACKGROUND_SYNC_INTERVAL_MS = 30000
+
 function AppShell() {
   const location = useLocation()
   const shouldBypassSandboxSync = import.meta.env.DEV && location.pathname === '/dev/sandbox'
@@ -53,10 +55,17 @@ function AppShell() {
       void refreshStatus()
     }
 
+    const backgroundSyncInterval = window.setInterval(() => {
+      if (navigator.onLine) {
+        void sync()
+      }
+    }, BACKGROUND_SYNC_INTERVAL_MS)
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     return () => {
       isMounted = false
+      window.clearInterval(backgroundSyncInterval)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }

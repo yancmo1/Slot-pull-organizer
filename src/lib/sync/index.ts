@@ -2,6 +2,41 @@ import { db } from '../db'
 import type { SyncQueueItem } from '../../types'
 import { getPocketBase, isPocketBaseConfigured } from './pocketbase'
 
+const AUTO_SYNC_DEBOUNCE_MS = 1500
+
+let autoSyncTimer: ReturnType<typeof setTimeout> | null = null
+let autoSyncInFlight = false
+
+async function runAutoSync(): Promise<void> {
+  if (autoSyncInFlight) return
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+  if (!isPocketBaseConfigured()) return
+
+  const pb = getPocketBase()
+  if (!pb.authStore.isValid) return
+
+  autoSyncInFlight = true
+  try {
+    await flushSyncQueue()
+    await pullChanges()
+  } finally {
+    autoSyncInFlight = false
+  }
+}
+
+function scheduleAutoSync(): void {
+  if (autoSyncTimer) {
+    clearTimeout(autoSyncTimer)
+  }
+
+  autoSyncTimer = setTimeout(() => {
+    autoSyncTimer = null
+    void runAutoSync().catch((error) => {
+      console.error('[scheduleAutoSync] background sync error:', error)
+    })
+  }, AUTO_SYNC_DEBOUNCE_MS)
+}
+
 export interface SyncQueueStats {
   pendingCount: number
   failedCount: number
@@ -98,6 +133,7 @@ export async function enqueueSync(
     failed_at: null,
   }
   await db.syncQueue.add(item)
+  scheduleAutoSync()
 }
 
 export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
