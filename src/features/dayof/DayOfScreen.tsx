@@ -46,7 +46,7 @@ export function DayOfScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { events, loading: eventsLoading, loaded: eventsLoaded, loadEvents } = useEventStore()
-  const { participants, loadParticipants, toggleCheckedIn, markPaid, checkInAll } = useParticipantStore()
+  const { participants, loadParticipants, toggleCheckInWithPayment, markPaid, checkInAll } = useParticipantStore()
   const {
     currentRound,
     sessionActive,
@@ -428,7 +428,7 @@ export function DayOfScreen() {
             <DayOfParticipantCard
               key={p.id}
               participant={p}
-              onCheckin={() => toggleCheckedIn(p.id)}
+              onCheckin={() => toggleCheckInWithPayment(p.id)}
               onPaid={() => markPaid(p.id)}
               playMode={playMode}
               hasSpun={currentRoundSpunIds.has(p.id)}
