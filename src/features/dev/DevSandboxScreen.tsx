@@ -180,6 +180,7 @@ export function DevSandboxScreen() {
                 participant={participant}
                 onCheckin={() => {}}
                 onPaid={() => {}}
+                onPaidOut={() => {}}
                 playMode={playModePreview}
                 hasSpun={previewSpunIds.has(participant.id)}
                 priorityLabel={getDayOfPriorityLabel(participant, {
