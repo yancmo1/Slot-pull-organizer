@@ -15,6 +15,7 @@ interface ParticipantStore {
   toggleCheckInWithPayment: (id: string) => Promise<void>
   toggleWaitlist: (id: string) => Promise<void>
   markPaid: (id: string) => Promise<void>
+  togglePaidOut: (id: string) => Promise<void>
   togglePaid: (id: string) => Promise<void>
   checkInAll: (eventId: string) => Promise<void>
 }
@@ -39,6 +40,7 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
       ...data,
       id: crypto.randomUUID(),
       payment_status: calculatePaymentStatus(data.amount_paid, data.buy_in_amount),
+      paid_out: data.paid_out ?? false,
       created_at: now,
       updated_at: now,
       deleted_at: null,
@@ -55,7 +57,12 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
     const now = new Date().toISOString()
     const merged = { ...existing, ...data }
     const payment_status = calculatePaymentStatus(merged.amount_paid, merged.buy_in_amount)
-    const updates = { ...data, payment_status, updated_at: now }
+    const updates = {
+      ...data,
+      payment_status,
+      paid_out: payment_status === 'paid' ? merged.paid_out ?? false : false,
+      updated_at: now,
+    }
     await db.participants.update(id, updates)
     await enqueueSync('participant', id, 'update', updates)
     set((state) => ({
@@ -100,6 +107,12 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
     const p = get().participants.find((p) => p.id === id)
     if (!p) return
     await get().updateParticipant(id, { amount_paid: getQuickPaidToggleAmount(p, true) })
+  },
+
+  togglePaidOut: async (id) => {
+    const p = get().participants.find((p) => p.id === id)
+    if (!p || p.payment_status !== 'paid') return
+    await get().updateParticipant(id, { paid_out: !(p.paid_out ?? false) })
   },
 
   togglePaid: async (id) => {
