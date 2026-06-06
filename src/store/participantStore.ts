@@ -12,7 +12,7 @@ interface ParticipantStore {
   updateParticipant: (id: string, data: Partial<Participant>) => Promise<void>
   deleteParticipant: (id: string) => Promise<void>
   toggleCheckedIn: (id: string) => Promise<void>
-  checkInAndMarkPaid: (id: string) => Promise<void>
+  toggleCheckInWithPayment: (id: string) => Promise<void>
   toggleWaitlist: (id: string) => Promise<void>
   markPaid: (id: string) => Promise<void>
   togglePaid: (id: string) => Promise<void>
@@ -77,7 +77,7 @@ export const useParticipantStore = create<ParticipantStore>((set, get) => ({
     await get().updateParticipant(id, { checked_in: !p.checked_in })
   },
 
-  checkInAndMarkPaid: async (id) => {
+  toggleCheckInWithPayment: async (id) => {
     const p = get().participants.find((p) => p.id === id)
     if (!p) return
     if (!p.checked_in) {
