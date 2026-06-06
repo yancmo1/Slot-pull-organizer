@@ -22,6 +22,7 @@ export interface Participant {
   buy_in_amount: number;
   amount_paid: number;
   payment_status: 'unpaid' | 'partial' | 'paid';
+  paid_out?: boolean;
   payment_method: string | null;
   checked_in: boolean;
   waitlist: boolean;

@@ -6,6 +6,7 @@ export interface DayOfParticipantCardProps {
   participant: Participant
   onCheckin: () => void
   onPaid: () => void
+  onPaidOut: () => void
   playMode?: boolean
   hasSpun?: boolean
   priorityLabel?: string | null
@@ -16,6 +17,7 @@ export function DayOfParticipantCard({
   participant,
   onCheckin,
   onPaid,
+  onPaidOut,
   playMode,
   hasSpun,
   priorityLabel,
@@ -23,6 +25,7 @@ export function DayOfParticipantCard({
 }: DayOfParticipantCardProps) {
   const isPaid = participant.payment_status === 'paid'
   const isPartial = participant.payment_status === 'partial'
+  const isPaidOut = participant.paid_out ?? false
 
   const paymentBadgeClass = isPaid
     ? 'bg-green-900 text-green-200'
@@ -89,14 +92,23 @@ export function DayOfParticipantCard({
             >
               {participant.checked_in ? '✓ Checked In' : 'Check In'}
             </Button>
-            {!isPaid && (
+            {!isPaid ? (
               <Button
                 size="md"
                 variant="secondary"
                 className="flex-1"
                 onClick={onPaid}
               >
-                Paid Out
+                Mark Paid
+              </Button>
+            ) : (
+              <Button
+                size="md"
+                variant={isPaidOut ? 'primary' : 'secondary'}
+                className="flex-1"
+                onClick={onPaidOut}
+              >
+                {isPaidOut ? '✓ Paid Out' : 'Paid Out'}
               </Button>
             )}
           </>
