@@ -96,7 +96,7 @@ export function DayOfParticipantCard({
                 className="flex-1"
                 onClick={onPaid}
               >
-                Mark Paid
+                Paid Out
               </Button>
             )}
           </>
